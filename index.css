@@ -1,0 +1,143 @@
+@import "tailwindcss";
+
+/* Tailwind v4 Theme Configuration */
+@theme {
+  /* Brand Colors - Valores padrão que podem ser sobrescritos via JS */
+  --color-sesh-black: #000000;
+  --color-sesh-white: #FFFFFF;
+  --color-sesh-cyan: #00B4BD;
+  --color-sesh-gray: #F2F2F2;
+  --color-sesh-darkgray: #333333;
+  --color-sesh-red: #DC3545;
+  --color-sesh-warning: #FFA500;
+
+  /* Brand Dynamic Colors - Usados para cores que mudam por marca */
+  --color-brand-primary: #00B4BD;
+  --color-brand-secondary: #000000;
+  --color-brand-background: #FFFFFF;
+  --color-brand-text: #333333;
+
+  /* Font Families */
+  --font-sans: 'Montserrat', sans-serif;
+  --font-display: 'Montserrat', sans-serif;
+  --font-brand: 'Montserrat', sans-serif;
+
+  /* Custom Spacing */
+  --spacing-128: 32rem;
+}
+
+/* Custom scrollbar to match the vibe */
+::-webkit-scrollbar {
+  width: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: #f1f1f1;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #000;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #00B4BD;
+}
+
+/* Base styles */
+body {
+  font-family: 'Montserrat', sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Custom animations */
+@keyframes fade-in {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-fade-in {
+  animation: fade-in 0.5s ease-out forwards;
+}
+
+@keyframes slide-in-right {
+  from {
+    transform: translateX(100%);
+  }
+  to {
+    transform: translateX(0);
+  }
+}
+
+.animate-slide-in-right {
+  animation: slide-in-right 0.3s ease-out forwards;
+}
+
+@keyframes slide-in-left {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(0);
+  }
+}
+
+.animate-slide-in-left {
+  animation: slide-in-left 0.3s ease-out forwards;
+}
+
+@keyframes slide-down {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-slide-down {
+  animation: slide-down 0.3s ease-out forwards;
+}
+
+/* Hide scrollbar for touch scroll areas */
+.scrollbar-hide {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;
+}
+
+/* Marquee Animation */
+@keyframes marquee {
+  0% {
+    transform: translateX(0);
+  }
+  100% {
+    transform: translateX(-50%);
+  }
+}
+
+.animate-marquee {
+  animation: marquee 30s linear infinite;
+}
+
+.animate-marquee:hover {
+  animation-play-state: paused;
+}
+
+/* Faster marquee for mobile */
+@media (max-width: 768px) {
+  .animate-marquee {
+    animation-duration: 20s;
+  }
+}

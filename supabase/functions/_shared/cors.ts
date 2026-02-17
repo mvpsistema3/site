@@ -1,0 +1,8 @@
+/**
+ * Headers CORS para Edge Functions
+ * Permite requisições do frontend
+ */
+export const corsHeaders = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+};
