@@ -84,10 +84,10 @@ export function useProductsByCategorySlug(categorySlug: string) {
     queryFn: async () => {
       if (!brand?.id || !categorySlug) return [];
 
-      // Primeiro buscar a categoria pelo slug
+      // Buscar a categoria pelo slug
       const { data: category, error: categoryError } = await supabase
         .from('categories')
-        .select('id')
+        .select('id, parent_id')
         .eq('slug', categorySlug)
         .eq('brand_id', brand.id)
         .is('deleted_at', null)
@@ -96,26 +96,48 @@ export function useProductsByCategorySlug(categorySlug: string) {
 
       if (categoryError || !category) return [];
 
-      // Buscar produtos da categoria
+      // Buscar subcategorias filhas (se a categoria for pai)
+      const { data: subcategories } = await supabase
+        .from('categories')
+        .select('id')
+        .eq('parent_id', category.id)
+        .eq('brand_id', brand.id)
+        .is('deleted_at', null)
+        .eq('active', true);
+
+      // Incluir a categoria atual + todas as subcategorias
+      const categoryIds = [
+        category.id,
+        ...((subcategories || []).map((s: any) => s.id)),
+      ];
+
+      // Buscar produtos de todas as categorias (pai + filhos)
       const { data, error } = await supabase
         .from('category_products')
         .select(`
           position,
+          category_id,
           products(
             *,
             product_images(id, url, alt_text, position),
             product_variants(id, color, color_hex, size, sku, stock, active, price, compare_at_price)
           )
         `)
-        .eq('category_id', category.id)
+        .in('category_id', categoryIds)
         .order('position', { ascending: true });
 
       if (error) throw error;
 
-      // Extrair produtos do resultado
-      return (data || [])
-        .map((item: any) => item.products)
-        .filter((p: any) => p && p.active && !p.deleted_at);
+      // Deduplicar produtos (um produto pode estar em múltiplas subcategorias)
+      const uniqueProducts = new Map<string, any>();
+      (data || []).forEach((item: any) => {
+        const p = item.products;
+        if (p && p.active && !p.deleted_at && !uniqueProducts.has(p.id)) {
+          uniqueProducts.set(p.id, p);
+        }
+      });
+
+      return Array.from(uniqueProducts.values());
     },
     staleTime: 1000 * 60 * 5,
     enabled: !!categorySlug && !!brand?.id,

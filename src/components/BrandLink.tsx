@@ -7,11 +7,16 @@ interface BrandLinkProps extends Omit<LinkProps, 'to'> {
 }
 
 /**
- * Verifica se estamos em localhost
+ * Verifica se estamos em ambiente de desenvolvimento (requer prefixo de marca na URL)
  */
 const isLocalDev = () => {
-  return typeof window !== 'undefined' &&
-    (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
+  if (typeof window === 'undefined') return false;
+  const hostname = window.location.hostname;
+  return (
+    hostname === 'localhost' ||
+    hostname === '127.0.0.1' ||
+    hostname === 'dev-site.grupogot.com'
+  );
 };
 
 /**

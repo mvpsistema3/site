@@ -24,6 +24,7 @@ import { FAQPage } from './src/pages/FAQPage';
 import { StaticPageRenderer } from './src/pages/StaticPageRenderer';
 import { useApplyBrandTheme, useBrandColors } from './src/hooks/useTheme';
 import { getBrandUrlPrefix } from './src/lib/brand-detection';
+import { createAsaasPayment, BillingType } from './src/lib/asaas';
 import { BRAND_CONFIGS } from './src/config/brands';
 import { BrandLink, useBrandUrl, useBrandNavigate } from './src/components/BrandLink';
 import { SEOHead } from './src/components/SEOHead';
@@ -805,12 +806,10 @@ const Header = () => {
                     />
                   </BrandLink>
 
-                  {/* Dropdown Premium */}
+                  {/* Dropdown Subcategorias */}
                   {category.children && category.children.length > 0 && (
-                    <motion.div
-                      initial={{ opacity: 0, y: -10 }}
-                      animate={{ opacity: 0, y: -10 }}
-                      className="absolute top-full left-0 mt-3 bg-white shadow-xl rounded-xl py-2 min-w-[200px] border border-gray-100 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-50 overflow-hidden"
+                    <div
+                      className="absolute top-full left-0 mt-3 bg-white shadow-xl rounded-xl py-2 min-w-[200px] border border-gray-100 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 z-50 overflow-hidden"
                       style={{ backdropFilter: 'blur(8px)' }}
                     >
                       {category.children.map((sub, index) => (
@@ -827,12 +826,12 @@ const Header = () => {
                               {sub.name}
                             </span>
                           </BrandLink>
-                          {index < category.children.length - 1 && (
+                          {index < category.children!.length - 1 && (
                             <div className="mx-3 h-px bg-gray-100" />
                           )}
                         </React.Fragment>
                       ))}
-                    </motion.div>
+                    </div>
                   )}
                 </div>
               ))}
@@ -1640,6 +1639,10 @@ const CartPage = () => {
 const CheckoutPage = () => {
   const navigate = useNavigate();
   const [success, setSuccess] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
+  const [paymentError, setPaymentError] = useState<string | null>(null);
+  const [billingType, setBillingType] = useState<BillingType>('CREDIT_CARD');
+  const { brandConfig, currentSlug } = useBrand();
 
   // Usar cartStore ao invés de useCart para ter acesso ao shipping
   const {
@@ -1655,13 +1658,39 @@ const CheckoutPage = () => {
   const subtotal = cartSubtotal || cart.reduce((acc, item) => acc + (item.price * item.quantity), 0);
   const total = Math.max(0, subtotal - discountAmount) + shippingCost;
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    // Simulate API call
-    setTimeout(() => {
+    setIsLoading(true);
+    setPaymentError(null);
+
+    const form = e.currentTarget;
+    const data = new FormData(form);
+
+    try {
+      const result = await createAsaasPayment({
+        customer: {
+          name: data.get('name') as string,
+          email: data.get('email') as string,
+          cpfCnpj: data.get('cpf') as string,
+          phone: data.get('phone') as string,
+        },
+        value: total,
+        billingType,
+        description: `Pedido ${brandConfig.name} - ${cart.length} item(s)`,
+        brandSlug: currentSlug,
+      });
+
+      if (result.invoiceUrl) {
+        window.open(result.invoiceUrl, '_blank');
+      }
+
       setSuccess(true);
       clearCart();
-    }, 1500);
+    } catch (err) {
+      setPaymentError(err instanceof Error ? err.message : 'Erro ao processar pagamento. Tente novamente.');
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   if (cart.length === 0 && !success) {
@@ -1702,10 +1731,10 @@ const CheckoutPage = () => {
                 <User size={20} /> DADOS PESSOAIS
               </h2>
               <div className="grid md:grid-cols-2 gap-4">
-                <input required type="email" placeholder="E-mail" className="border p-3 rounded w-full focus:outline-none focus:ring-1 focus:ring-black" />
-                <input required type="text" placeholder="Nome Completo" className="border p-3 rounded w-full focus:outline-none focus:ring-1 focus:ring-black" />
-                <input required type="text" placeholder="CPF" className="border p-3 rounded w-full focus:outline-none focus:ring-1 focus:ring-black" />
-                <input required type="tel" placeholder="Telefone" className="border p-3 rounded w-full focus:outline-none focus:ring-1 focus:ring-black" />
+                <input required name="email" type="email" placeholder="E-mail" className="border p-3 rounded w-full focus:outline-none focus:ring-1 focus:ring-black" />
+                <input required name="name" type="text" placeholder="Nome Completo" className="border p-3 rounded w-full focus:outline-none focus:ring-1 focus:ring-black" />
+                <input required name="cpf" type="text" placeholder="CPF" className="border p-3 rounded w-full focus:outline-none focus:ring-1 focus:ring-black" />
+                <input name="phone" type="tel" placeholder="Telefone" className="border p-3 rounded w-full focus:outline-none focus:ring-1 focus:ring-black" />
               </div>
             </section>
 
@@ -1744,32 +1773,60 @@ const CheckoutPage = () => {
               </h2>
               
               <div className="flex gap-4 mb-6">
-                <label className="flex-1 cursor-pointer">
-                  <input type="radio" name="payment" className="peer sr-only" defaultChecked />
-                  <div className="text-center p-4 border-2 rounded peer-checked:border-sesh-cyan peer-checked:bg-sesh-cyan/5 transition-all">
+                <label className="flex-1 cursor-pointer" onClick={() => setBillingType('CREDIT_CARD')}>
+                  <input type="radio" name="billingType" className="peer sr-only" defaultChecked />
+                  <div className={`text-center p-4 border-2 rounded transition-all ${billingType === 'CREDIT_CARD' ? 'border-sesh-cyan bg-sesh-cyan/5' : ''}`}>
                     <CreditCard className="mx-auto mb-2" />
                     <span className="font-bold text-sm">CARTÃO</span>
                   </div>
                 </label>
-                <label className="flex-1 cursor-pointer">
-                  <input type="radio" name="payment" className="peer sr-only" />
-                  <div className="text-center p-4 border-2 rounded peer-checked:border-sesh-cyan peer-checked:bg-sesh-cyan/5 transition-all">
+                <label className="flex-1 cursor-pointer" onClick={() => setBillingType('PIX')}>
+                  <input type="radio" name="billingType" className="peer sr-only" />
+                  <div className={`text-center p-4 border-2 rounded transition-all ${billingType === 'PIX' ? 'border-sesh-cyan bg-sesh-cyan/5' : ''}`}>
                     <span className="font-sans text-xl block mb-1">PIX</span>
                     <span className="font-bold text-sm">10% OFF</span>
                   </div>
                 </label>
+                <label className="flex-1 cursor-pointer" onClick={() => setBillingType('BOLETO')}>
+                  <input type="radio" name="billingType" className="peer sr-only" />
+                  <div className={`text-center p-4 border-2 rounded transition-all ${billingType === 'BOLETO' ? 'border-sesh-cyan bg-sesh-cyan/5' : ''}`}>
+                    <Package className="mx-auto mb-2" />
+                    <span className="font-bold text-sm">BOLETO</span>
+                  </div>
+                </label>
               </div>
 
-              <div className="space-y-4">
-                <input required type="text" placeholder="Número do Cartão" className="border p-3 rounded w-full focus:outline-none focus:ring-1 focus:ring-black" />
-                <input required type="text" placeholder="Nome Impresso no Cartão" className="border p-3 rounded w-full focus:outline-none focus:ring-1 focus:ring-black" />
-                <div className="grid grid-cols-2 gap-4">
-                  <input required type="text" placeholder="Validade (MM/AA)" className="border p-3 rounded w-full focus:outline-none focus:ring-1 focus:ring-black" />
-                  <input required type="text" placeholder="CVV" className="border p-3 rounded w-full focus:outline-none focus:ring-1 focus:ring-black" />
+              {billingType === 'CREDIT_CARD' && (
+                <div className="space-y-4">
+                  <input type="text" placeholder="Número do Cartão" className="border p-3 rounded w-full focus:outline-none focus:ring-1 focus:ring-black" />
+                  <input type="text" placeholder="Nome Impresso no Cartão" className="border p-3 rounded w-full focus:outline-none focus:ring-1 focus:ring-black" />
+                  <div className="grid grid-cols-2 gap-4">
+                    <input type="text" placeholder="Validade (MM/AA)" className="border p-3 rounded w-full focus:outline-none focus:ring-1 focus:ring-black" />
+                    <input type="text" placeholder="CVV" className="border p-3 rounded w-full focus:outline-none focus:ring-1 focus:ring-black" />
+                  </div>
                 </div>
-                <div className="flex items-center gap-2 text-xs text-gray-500 mt-2">
-                  <Lock size={12} /> Ambiente seguro e criptografado
+              )}
+
+              {billingType === 'PIX' && (
+                <div className="bg-green-50 border border-green-200 rounded p-4 text-sm text-green-800">
+                  Após confirmar, você será redirecionado para a página de pagamento com o QR Code PIX.
                 </div>
+              )}
+
+              {billingType === 'BOLETO' && (
+                <div className="bg-blue-50 border border-blue-200 rounded p-4 text-sm text-blue-800">
+                  Após confirmar, você será redirecionado para a página do boleto. Prazo de vencimento: 1 dia útil.
+                </div>
+              )}
+
+              {paymentError && (
+                <div className="mt-4 bg-red-50 border border-red-200 rounded p-4 text-sm text-red-700">
+                  {paymentError}
+                </div>
+              )}
+
+              <div className="flex items-center gap-2 text-xs text-gray-500 mt-4">
+                <Lock size={12} /> Pagamento processado com segurança via Asaas
               </div>
             </section>
           </form>
@@ -1817,8 +1874,8 @@ const CheckoutPage = () => {
               </div>
             </div>
 
-            <Button type="submit" form="checkout-form" fullWidth className="mt-6 py-4 text-lg shadow-xl hover:shadow-2xl hover:-translate-y-1">
-              PAGAR AGORA
+            <Button type="submit" form="checkout-form" fullWidth disabled={isLoading} className="mt-6 py-4 text-lg shadow-xl hover:shadow-2xl hover:-translate-y-1">
+              {isLoading ? 'PROCESSANDO...' : 'PAGAR AGORA'}
             </Button>
             <p className="text-center text-xs text-gray-400 mt-4">
               Ao finalizar a compra você concorda com nossos termos de uso.
@@ -1902,7 +1959,9 @@ const HomePage = () => {
   const { brand, brandConfig, isLoading: brandLoading } = useBrand();
   const { primaryColor } = useBrandColors();
   const { data: heroBanner, isLoading: bannerLoading } = useHeroBanner();
-  const { data: merchCategories, isLoading: merchLoading } = useFeaturedCategories();
+  const { data: featuredProducts } = useFeaturedProducts();
+  const { data: featuredCategories } = useFeaturedCategories();
+  const navigate = useNavigate();
   const { data: tabacariaCategories, isLoading: tabacariaLoading } = useTabacariaCategories();
 
   // Aplicar tema dinâmico
@@ -1971,18 +2030,108 @@ const HomePage = () => {
         textColor="#FFFFFF"
       />
 
-      {/* 3. Seção MERCH - Produtos em destaque com tabs */}
-      {merchCategories && merchCategories.length > 0 && (
-        <ProductSectionWithTabs
-          title="MERCH"
-          categories={merchCategories}
-          showAllOption={false}
-          maxProducts={4}
-          sectionId="merch"
-        />
+      {/* 3. Categorias em Destaque */}
+      {featuredCategories && featuredCategories.length > 0 && (
+        <section className="py-12 md:py-16 bg-white">
+          <div className="container mx-auto px-6 md:px-8 lg:px-12">
+            <h2 className="font-sans text-3xl md:text-4xl text-center mb-10 tracking-tight">CATEGORIAS</h2>
+            <div className={`grid gap-4 md:gap-6 ${
+              featuredCategories.length === 1 ? 'grid-cols-1 max-w-lg mx-auto'
+              : featuredCategories.length === 2 ? 'grid-cols-2 max-w-2xl mx-auto'
+              : featuredCategories.length === 3 ? 'grid-cols-3'
+              : featuredCategories.length === 4 ? 'grid-cols-2 md:grid-cols-4'
+              : 'grid-cols-2 md:grid-cols-3'
+            }`}>
+              {featuredCategories.map((category: any) => (
+                <BrandLink key={category.id} to={`/shop?category=${category.slug}`}>
+                  <div className="relative overflow-hidden rounded-xl group cursor-pointer aspect-[4/3]">
+                    {category.banner_url ? (
+                      <img
+                        src={category.banner_url}
+                        alt={category.name}
+                        className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110"
+                      />
+                    ) : (
+                      <div
+                        className="w-full h-full flex items-center justify-center"
+                        style={{ backgroundColor: `${primaryColor}15` }}
+                      >
+                        <span className="text-5xl">{category.icon || '🏷️'}</span>
+                      </div>
+                    )}
+                    {/* Overlay */}
+                    <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/10 to-transparent transition-opacity duration-300 group-hover:from-black/80" />
+                    {/* Label */}
+                    <div className="absolute bottom-0 left-0 right-0 p-4 md:p-5">
+                      <span className="text-white font-bold text-sm md:text-base uppercase tracking-wider block">
+                        {category.name}
+                      </span>
+                      {category.description && (
+                        <span className="text-white/70 text-xs mt-1 block line-clamp-1 hidden md:block">
+                          {category.description}
+                        </span>
+                      )}
+                    </div>
+                    {/* Hover CTA */}
+                    <div
+                      className="absolute top-3 right-3 w-8 h-8 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all duration-300 transform translate-x-2 group-hover:translate-x-0"
+                      style={{ backgroundColor: primaryColor }}
+                    >
+                      <ChevronRight size={14} className="text-white" />
+                    </div>
+                  </div>
+                </BrandLink>
+              ))}
+            </div>
+          </div>
+        </section>
       )}
 
-      {/* 4. Banner Desconto Progressivo */}
+      {/* 4. Seção DESTAQUES - Todos os produtos em destaque */}
+      {featuredProducts && featuredProducts.length > 0 && (
+        <section id="destaques" className="py-16 md:py-20">
+          <div className="container mx-auto px-6 md:px-8 lg:px-12">
+            <h2 className="font-sans text-3xl md:text-4xl text-center mb-8">DESTAQUES</h2>
+            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 md:gap-6 lg:gap-8">
+              {featuredProducts.map((product: any) => {
+                const images = product.product_images
+                  ? product.product_images
+                      .sort((a: any, b: any) => (a.position || 0) - (b.position || 0))
+                      .map((img: any) => img.url)
+                  : product.images || [];
+                const colors = product.product_variants
+                  ? [...new Set(product.product_variants.map((v: any) => v.color_hex || v.color).filter(Boolean))]
+                  : product.colors || [];
+                const sizes = product.product_variants
+                  ? [...new Set(product.product_variants.map((v: any) => v.size).filter(Boolean))]
+                  : product.sizes || [];
+                const stock = product.product_variants
+                  ? product.product_variants.reduce((sum: number, v: any) => sum + (v.stock || 0), 0)
+                  : product.stock || 0;
+                const normalized = {
+                  ...product,
+                  images,
+                  colors,
+                  sizes,
+                  stock,
+                  originalPrice: product.compare_at_price || product.original_price,
+                  rating: product.rating || 0,
+                  reviews: product.reviews || 0,
+                };
+                return (
+                  <ProductCard
+                    key={product.id}
+                    product={normalized}
+                    onView={(p) => navigate(`/product/${p.id}`)}
+                  />
+                );
+              })}
+            </div>
+          </div>
+        </section>
+      )}
+
+      {/* 5. Banner Desconto Progressivo */}
       <section className="bg-gradient-to-r from-black to-gray-900 text-white py-12 md:py-16">
         <div className="container mx-auto px-4 text-center">
           <h2 className="font-sans text-3xl md:text-4xl mb-2" style={{ color: primaryColor }}>DESCONTO PROGRESSIVO!</h2>
@@ -2000,7 +2149,7 @@ const HomePage = () => {
         </div>
       </section>
 
-      {/* 5. Seção TABACARIA - Produtos com tabs de categoria */}
+      {/* 6. Seção TABACARIA - Produtos com tabs de categoria */}
       {tabacariaCategories && tabacariaCategories.length > 0 && (
         <ProductSectionWithTabs
           title="TABACARIA"
@@ -2012,7 +2161,7 @@ const HomePage = () => {
         />
       )}
 
-      {/* 6. Quem Somos - Resumo */}
+      {/* 7. Quem Somos - Resumo */}
       <section className="bg-white py-16 md:py-20">
         <div className="container mx-auto px-6 md:px-8">
           <div className="max-w-4xl mx-auto text-center">
@@ -2035,7 +2184,7 @@ const HomePage = () => {
         </div>
       </section>
 
-      {/* 7. FAQ Section */}
+      {/* 8. FAQ Section */}
       <FAQSection />
     </main>
   );
@@ -2129,8 +2278,20 @@ const ProductListPage = () => {
     });
   };
 
+  // Busca recursiva de categoria na árvore (suporta subcategorias)
+  const findCategoryInTree = (cats: Category[], slug: string): Category | undefined => {
+    for (const cat of cats) {
+      if (cat.slug === slug) return cat;
+      if (cat.children && cat.children.length > 0) {
+        const found = findCategoryInTree(cat.children, slug);
+        if (found) return found;
+      }
+    }
+    return undefined;
+  };
+
   // Título dinâmico
-  const currentCategory = categories?.find((c: any) => c.slug === categorySlug);
+  const currentCategory = categorySlug ? findCategoryInTree(categories || [], categorySlug) : undefined;
   const pageTitle = isSearching
     ? `Resultados para "${searchQuery}"`
     : (currentCategory?.name || 'PRODUTOS');

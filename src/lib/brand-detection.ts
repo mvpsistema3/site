@@ -42,12 +42,17 @@ export const detectBrandFromHostname = (): string => {
 
   const hostname = window.location.hostname;
 
+  // Dev VPS - não detecta marca pelo hostname, usa path detection
+  if (hostname === 'dev-site.grupogot.com') {
+    return DEFAULT_BRAND;
+  }
+
   // Produção - detecta pela URL
   if (hostname.includes('seshstore.com.br')) {
     return 'sesh';
   }
 
-  if (hostname.includes('grupogot.com')) {
+  if (hostname === 'grupogot.com' || hostname === 'www.grupogot.com') {
     return 'grupogot';
   }
 
@@ -112,13 +117,17 @@ export const getCurrentBrand = (): string => {
  */
 export const getBrandUrlPrefix = (): string => {
   const brand = getCurrentBrand();
-  // Em localhost, usa o prefixo da marca
   if (typeof window !== 'undefined') {
     const hostname = window.location.hostname;
-    if (hostname === 'localhost' || hostname === '127.0.0.1') {
+    // Em desenvolvimento (localhost ou VPS de dev), usa o prefixo da marca
+    const isDevEnv =
+      hostname === 'localhost' ||
+      hostname === '127.0.0.1' ||
+      hostname === 'dev-site.grupogot.com';
+    if (isDevEnv) {
       return `/${brand}`;
     }
   }
-  // Em produção (domínio próprio), não precisa de prefixo
+  // Em produção (domínio próprio por marca), não precisa de prefixo
   return '';
 };

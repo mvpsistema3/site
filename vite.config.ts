@@ -7,8 +7,9 @@ export default defineConfig(({ mode }) => {
     return {
       server: {
         port: 3011,
-        host: 'localhost',
+        host: '0.0.0.0',
         strictPort: true,
+        allowedHosts: ['dev-site.grupogot.com'],
       },
       plugins: [react()],
       define: {
