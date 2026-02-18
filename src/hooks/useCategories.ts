@@ -247,7 +247,7 @@ export function useSubcategories(parentId: string | null) {
 
 /**
  * Busca categorias de tabacaria para homepage
- * Filtra por is_tabacaria = true
+ * Filtra por is_tabacaria = true e apenas categorias com produtos vinculados
  */
 export function useTabacariaCategories() {
   const { brand } = useBrand();
@@ -257,9 +257,10 @@ export function useTabacariaCategories() {
     queryFn: async () => {
       if (!brand?.id) return [];
 
+      // !inner garante que só retorna categorias que têm ao menos 1 produto em category_products
       const { data, error } = await supabase
         .from('categories')
-        .select('*')
+        .select('*, category_products!inner(product_id)')
         .is('deleted_at', null)
         .eq('active', true)
         .eq('is_tabacaria', true)
@@ -268,7 +269,9 @@ export function useTabacariaCategories() {
         .order('name', { ascending: true });
 
       if (error) throw error;
-      return data as Category[];
+
+      // Remove o campo category_products que foi usado apenas para o filtro
+      return (data as any[]).map(({ category_products: _cp, ...rest }) => rest) as Category[];
     },
     staleTime: 1000 * 60 * 5,
     enabled: !!brand?.id,

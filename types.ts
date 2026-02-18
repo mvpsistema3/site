@@ -20,9 +20,8 @@ export interface CartItem extends Product {
 }
 
 export interface FilterState {
-  category: string[];
   color: string[];
   size: string[];
-  priceRange: string | null;
+  priceRange: [number, number] | null;
   sort: string;
 }

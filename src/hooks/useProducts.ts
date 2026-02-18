@@ -19,7 +19,8 @@ export function useProducts() {
         .select(`
           *,
           product_images(url, alt_text, position),
-          product_variants(id, color, color_hex, size, sku, stock, price, compare_at_price)
+          product_variants(id, color, color_hex, size, sku, stock, price, compare_at_price),
+          category_products(categories(id, name, slug))
         `)
         .is('deleted_at', null)
         .eq('active', true)
@@ -120,7 +121,8 @@ export function useProductsByCategorySlug(categorySlug: string) {
           products(
             *,
             product_images(id, url, alt_text, position),
-            product_variants(id, color, color_hex, size, sku, stock, active, price, compare_at_price)
+            product_variants(id, color, color_hex, size, sku, stock, active, price, compare_at_price),
+            category_products(categories(id, name, slug))
           )
         `)
         .in('category_id', categoryIds)
@@ -204,6 +206,40 @@ export function useFeaturedProducts() {
     },
     staleTime: 1000 * 60 * 5,
     enabled: !!brand?.id,
+  });
+}
+
+/**
+ * Fetch suggested products for a given product
+ * Uses the product_suggestions table to return only explicitly linked products
+ */
+export function useProductSuggestions(productId: string) {
+  return useQuery({
+    queryKey: ['product-suggestions', productId],
+    queryFn: async () => {
+      if (!productId) return [];
+
+      const { data, error } = await supabase
+        .from('product_suggestions')
+        .select(`
+          position,
+          suggested_product:products!product_suggestions_suggested_product_id_fkey(
+            *,
+            product_images(url, alt_text, position),
+            product_variants(id, color, color_hex, size, sku, stock, price, compare_at_price)
+          )
+        `)
+        .eq('product_id', productId)
+        .order('position', { ascending: true });
+
+      if (error) throw error;
+
+      return (data || [])
+        .map((row: any) => row.suggested_product)
+        .filter((p: any) => p && p.active && !p.deleted_at);
+    },
+    enabled: !!productId,
+    staleTime: 1000 * 60 * 5,
   });
 }
 

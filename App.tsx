@@ -3,7 +3,7 @@ import { HashRouter, Routes, Route, Link, useParams, useNavigate, useLocation, u
 import { QueryClientProvider } from '@tanstack/react-query';
 import {
   Search, User, ShoppingBag, Heart, Menu, X,
-  ChevronRight, Star, Truck, ShieldCheck,
+  ChevronLeft, ChevronRight, Star, Truck, ShieldCheck,
   CreditCard, Instagram, Facebook, Youtube, Twitter,
   MapPin, Calendar, Lock, CheckCircle, Minus, Plus, Trash2, HelpCircle,
   ArrowRight, Package
@@ -14,7 +14,7 @@ import { BrandProvider, useBrand } from './src/contexts/BrandContext';
 import { SearchProvider, useSearch } from './src/contexts/SearchContext';
 import { AuthProvider } from './src/contexts/AuthContext';
 import { queryClient } from './src/lib/queryClient';
-import { useFeaturedProducts, useProducts, useProduct, useProductsByCategorySlug } from './src/hooks/useProducts';
+import { useFeaturedProducts, useProducts, useProduct, useProductsByCategorySlug, useProductSuggestions } from './src/hooks/useProducts';
 import { useFuzzySearch } from './src/hooks/useFuzzySearch';
 import { useHeroBanner } from './src/hooks/useBanners';
 import { useCategories, useCategoryTree, useMenuCategories, useFeaturedCategories, useTabacariaCategories, Category } from './src/hooks/useCategories';
@@ -2209,12 +2209,13 @@ const ProductListPage = () => {
   const { products: searchResults, isLoading: loadingSearch, isSearching } = useFuzzySearch(searchQuery);
 
   const [filterState, setFilterState] = useState<FilterState>({
-    category: [],
     color: [],
     size: [],
     priceRange: null,
     sort: 'relevance'
   });
+  const [priceMin, setPriceMin] = useState('');
+  const [priceMax, setPriceMax] = useState('');
 
   const [isMobileFiltersOpen, setIsMobileFiltersOpen] = useState(false);
 
@@ -2224,28 +2225,34 @@ const ProductListPage = () => {
     : (categorySlug ? (categoryProducts || []) : (allProducts || []));
   const isLoading = isSearching ? loadingSearch : (categorySlug ? loadingCategory : loadingAll);
 
-  // Extrair subcategorias únicas dos produtos (campo category do produto)
-  const availableProductCategories = [...new Set(baseProducts.map((p: any) => p.category).filter(Boolean))];
-
-  // Extrair cores únicas das variantes
-  const availableColors = [...new Set(
+  // Cores com hex real das variantes
+  const availableColors = [...new Map(
     baseProducts.flatMap((p: any) =>
-      (p.product_variants || []).map((v: any) => v.color).filter(Boolean)
-    )
-  )];
+      (p.product_variants || [])
+        .filter((v: any) => v.color)
+        .map((v: any) => ({ name: v.color, hex: v.color_hex }))
+    ).map((c: any) => [c.name, c])
+  ).values()];
 
-  // Extrair tamanhos únicos das variantes
+  // Tamanhos únicos das variantes
   const availableSizes = [...new Set(
     baseProducts.flatMap((p: any) =>
       (p.product_variants || []).map((v: any) => v.size).filter(Boolean)
     )
   )];
 
+  // Faixa de preço real dos produtos
+  const allPrices = baseProducts.map((p: any) => {
+    const variantPrices = (p.product_variants || [])
+      .map((v: any) => Number(v.price || p.price))
+      .filter((n: number) => n > 0);
+    return variantPrices.length > 0 ? Math.min(...variantPrices) : Number(p.price);
+  }).filter((n: number) => n > 0);
+  const minPriceAvailable = allPrices.length > 0 ? Math.floor(Math.min(...allPrices)) : 0;
+  const maxPriceAvailable = allPrices.length > 0 ? Math.ceil(Math.max(...allPrices)) : 9999;
+
   // Aplicar filtros
   const filteredProducts = baseProducts.filter((p: any) => {
-    // Filtro por categoria
-    if (filterState.category.length > 0 && !filterState.category.includes(p.category)) return false;
-
     // Filtro por cor
     if (filterState.color.length > 0) {
       const productColors = (p.product_variants || []).map((v: any) => v.color).filter(Boolean);
@@ -2256,6 +2263,16 @@ const ProductListPage = () => {
     if (filterState.size.length > 0) {
       const productSizes = (p.product_variants || []).map((v: any) => v.size).filter(Boolean);
       if (!productSizes.some((s: string) => filterState.size.includes(s))) return false;
+    }
+
+    // Filtro por preço
+    if (filterState.priceRange) {
+      const [minP, maxP] = filterState.priceRange;
+      const variantPrices = (p.product_variants || [])
+        .map((v: any) => Number(v.price || p.price))
+        .filter((n: number) => n > 0);
+      const productMinPrice = variantPrices.length > 0 ? Math.min(...variantPrices) : Number(p.price);
+      if (productMinPrice < minP || productMinPrice > maxP) return false;
     }
 
     return true;
@@ -2366,53 +2383,67 @@ const ProductListPage = () => {
             </div>
           )}
 
-          {/* Tipo de Produto - Premium Checkboxes */}
-          {availableProductCategories.length > 0 && (
+          {/* Preço */}
+          {allPrices.length > 0 && (
             <div className="pb-8 border-b border-gray-100">
-              <h3 className="font-bold text-sm uppercase tracking-wider mb-5 text-gray-900">Tipo</h3>
+              <h3 className="font-bold text-sm uppercase tracking-wider mb-5 text-gray-900">Preço</h3>
               <div className="space-y-3">
-                {availableProductCategories.map((cat: string) => (
-                  <label key={cat} className="flex items-center gap-3 cursor-pointer group">
-                    <div
-                      className={`w-5 h-5 border-2 rounded flex items-center justify-center transition-all duration-200 active:scale-95 ${filterState.category.includes(cat) ? 'border-transparent scale-100' : 'border-gray-300 group-hover:border-gray-400'}`}
-                      style={filterState.category.includes(cat) ? { backgroundColor: primaryColor } : {}}
-                    >
-                      {filterState.category.includes(cat) && <div className="w-2 h-2 bg-white rounded-full" />}
-                    </div>
-                    <span
-                      className="text-sm text-gray-600 group-hover:text-gray-900 transition-colors select-none"
-                      onClick={() => toggleFilter('category', cat)}
-                    >
-                      {cat}
-                    </span>
-                  </label>
-                ))}
+                <p className="text-xs text-gray-400">
+                  R$ {minPriceAvailable.toLocaleString('pt-BR')} — R$ {maxPriceAvailable.toLocaleString('pt-BR')}
+                </p>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="number"
+                    min={0}
+                    placeholder="Mín"
+                    value={priceMin}
+                    onChange={(e) => {
+                      setPriceMin(e.target.value);
+                      const min = e.target.value ? Number(e.target.value) : null;
+                      const max = priceMax ? Number(priceMax) : null;
+                      setFilterState(prev => ({ ...prev, priceRange: min !== null || max !== null ? [min ?? minPriceAvailable, max ?? maxPriceAvailable] : null }));
+                    }}
+                    className="flex-1 border-2 border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-700 focus:outline-none w-0"
+                    onFocus={(e) => e.target.style.borderColor = primaryColor}
+                    onBlur={(e) => e.target.style.borderColor = '#e5e7eb'}
+                  />
+                  <span className="text-gray-400 font-medium text-sm flex-shrink-0">–</span>
+                  <input
+                    type="number"
+                    min={0}
+                    placeholder="Máx"
+                    value={priceMax}
+                    onChange={(e) => {
+                      setPriceMax(e.target.value);
+                      const min = priceMin ? Number(priceMin) : null;
+                      const max = e.target.value ? Number(e.target.value) : null;
+                      setFilterState(prev => ({ ...prev, priceRange: min !== null || max !== null ? [min ?? minPriceAvailable, max ?? maxPriceAvailable] : null }));
+                    }}
+                    className="flex-1 border-2 border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-700 focus:outline-none w-0"
+                    onFocus={(e) => e.target.style.borderColor = primaryColor}
+                    onBlur={(e) => e.target.style.borderColor = '#e5e7eb'}
+                  />
+                </div>
               </div>
             </div>
           )}
 
-          {/* Cores - Premium Swatches */}
+          {/* Cores - Swatches com hex real do banco */}
           {availableColors.length > 0 && (
             <div className="pb-8 border-b border-gray-100">
               <h3 className="font-bold text-sm uppercase tracking-wider mb-5 text-gray-900">Cores</h3>
               <div className="flex flex-wrap gap-3">
-                {availableColors.map((color: string) => (
+                {availableColors.map((colorObj: any) => (
                   <button
-                    key={color}
-                    onClick={() => toggleFilter('color', color)}
-                    className={`w-10 h-10 rounded-full border-2 relative transition-all duration-200 hover:scale-110 active:scale-95 ${filterState.color.includes(color) ? 'ring-2 ring-offset-2 shadow-md' : 'border-gray-200 hover:border-gray-300'}`}
+                    key={colorObj.name}
+                    onClick={() => toggleFilter('color', colorObj.name)}
+                    className={`w-10 h-10 rounded-full border-2 relative transition-all duration-200 hover:scale-110 active:scale-95 ${filterState.color.includes(colorObj.name) ? 'shadow-md border-transparent' : 'border-gray-200 hover:border-gray-300'}`}
                     style={{
-                      backgroundColor: color.toLowerCase().includes('pret') ? '#1a1a1a'
-                        : color.toLowerCase().includes('branc') ? '#ffffff'
-                        : color.toLowerCase().includes('cinz') ? '#9e9e9e'
-                        : color.toLowerCase().includes('azul') ? '#3498db'
-                        : color.toLowerCase().includes('verd') ? '#27ae60'
-                        : color.toLowerCase().includes('vermelh') ? '#e74c3c'
-                        : '#cccccc',
-                      ...(filterState.color.includes(color) && { ringColor: primaryColor })
+                      backgroundColor: colorObj.hex || '#cccccc',
+                      ...(filterState.color.includes(colorObj.name) && { outline: `3px solid ${primaryColor}`, outlineOffset: '2px' })
                     }}
-                    title={color}
-                    aria-label={`Filtrar por cor: ${color}`}
+                    title={colorObj.name}
+                    aria-label={`Filtrar por cor: ${colorObj.name}`}
                   />
                 ))}
               </div>
@@ -2632,8 +2663,8 @@ const ProductListPage = () => {
                   </motion.div>
                 )}
 
-                {/* Tipo de produto */}
-                {availableProductCategories.length > 0 && (
+                {/* Preço */}
+                {allPrices.length > 0 && (
                   <motion.div
                     variants={{
                       hidden: { opacity: 0, y: 10 },
@@ -2641,20 +2672,42 @@ const ProductListPage = () => {
                     }}
                     className="pb-8 border-b border-gray-100"
                   >
-                    <h3 className="font-bold text-sm mb-4 uppercase tracking-wider text-gray-900">Tipo</h3>
-                    <div className="space-y-2">
-                      {availableProductCategories.map((cat: string) => (
-                        <label key={cat} className="flex items-center gap-3 py-2 cursor-pointer group">
-                          <div
-                            className={`w-5 h-5 border-2 rounded flex items-center justify-center transition-all duration-200 active:scale-95 ${filterState.category.includes(cat) ? 'border-transparent' : 'border-gray-300'}`}
-                            style={filterState.category.includes(cat) ? { backgroundColor: primaryColor } : {}}
-                            onClick={() => toggleFilter('category', cat)}
-                          >
-                            {filterState.category.includes(cat) && <div className="w-2 h-2 bg-white rounded-full" />}
-                          </div>
-                          <span className="text-sm text-gray-700 group-hover:text-gray-900 transition-colors select-none">{cat}</span>
-                        </label>
-                      ))}
+                    <h3 className="font-bold text-sm mb-4 uppercase tracking-wider text-gray-900">Preço</h3>
+                    <p className="text-xs text-gray-400 mb-3">
+                      R$ {minPriceAvailable.toLocaleString('pt-BR')} — R$ {maxPriceAvailable.toLocaleString('pt-BR')}
+                    </p>
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="number"
+                        min={0}
+                        placeholder="Mín"
+                        value={priceMin}
+                        onChange={(e) => {
+                          setPriceMin(e.target.value);
+                          const min = e.target.value ? Number(e.target.value) : null;
+                          const max = priceMax ? Number(priceMax) : null;
+                          setFilterState(prev => ({ ...prev, priceRange: min !== null || max !== null ? [min ?? minPriceAvailable, max ?? maxPriceAvailable] : null }));
+                        }}
+                        className="flex-1 border-2 border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-700 focus:outline-none min-h-[44px] w-0"
+                        onFocus={(e) => e.target.style.borderColor = primaryColor}
+                        onBlur={(e) => e.target.style.borderColor = '#e5e7eb'}
+                      />
+                      <span className="text-gray-400 font-medium flex-shrink-0">–</span>
+                      <input
+                        type="number"
+                        min={0}
+                        placeholder="Máx"
+                        value={priceMax}
+                        onChange={(e) => {
+                          setPriceMax(e.target.value);
+                          const min = priceMin ? Number(priceMin) : null;
+                          const max = e.target.value ? Number(e.target.value) : null;
+                          setFilterState(prev => ({ ...prev, priceRange: min !== null || max !== null ? [min ?? minPriceAvailable, max ?? maxPriceAvailable] : null }));
+                        }}
+                        className="flex-1 border-2 border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-700 focus:outline-none min-h-[44px] w-0"
+                        onFocus={(e) => e.target.style.borderColor = primaryColor}
+                        onBlur={(e) => e.target.style.borderColor = '#e5e7eb'}
+                      />
                     </div>
                   </motion.div>
                 )}
@@ -2684,7 +2737,7 @@ const ProductListPage = () => {
                   </motion.div>
                 )}
 
-                {/* Cores */}
+                {/* Cores - com hex real do banco */}
                 {availableColors.length > 0 && (
                   <motion.div
                     variants={{
@@ -2694,23 +2747,17 @@ const ProductListPage = () => {
                   >
                     <h3 className="font-bold text-sm mb-4 uppercase tracking-wider text-gray-900">Cores</h3>
                     <div className="flex flex-wrap gap-3">
-                      {availableColors.map((color: string) => (
+                      {availableColors.map((colorObj: any) => (
                         <button
-                          key={color}
-                          onClick={() => toggleFilter('color', color)}
-                          className={`w-11 h-11 rounded-full border-2 relative transition-all duration-200 hover:scale-110 active:scale-95 ${filterState.color.includes(color) ? 'ring-2 ring-offset-2 shadow-md' : 'border-gray-200'}`}
+                          key={colorObj.name}
+                          onClick={() => toggleFilter('color', colorObj.name)}
+                          className={`w-11 h-11 rounded-full border-2 relative transition-all duration-200 hover:scale-110 active:scale-95 ${filterState.color.includes(colorObj.name) ? 'shadow-md border-transparent' : 'border-gray-200'}`}
                           style={{
-                            backgroundColor: color.toLowerCase().includes('pret') ? '#1a1a1a'
-                              : color.toLowerCase().includes('branc') ? '#ffffff'
-                              : color.toLowerCase().includes('cinz') ? '#9e9e9e'
-                              : color.toLowerCase().includes('azul') ? '#3498db'
-                              : color.toLowerCase().includes('verd') ? '#27ae60'
-                              : color.toLowerCase().includes('vermelh') ? '#e74c3c'
-                              : '#cccccc',
-                            ...(filterState.color.includes(color) && { ringColor: primaryColor })
+                            backgroundColor: colorObj.hex || '#cccccc',
+                            ...(filterState.color.includes(colorObj.name) && { outline: `3px solid ${primaryColor}`, outlineOffset: '2px' })
                           }}
-                          title={color}
-                          aria-label={`Filtrar por cor: ${color}`}
+                          title={colorObj.name}
+                          aria-label={`Filtrar por cor: ${colorObj.name}`}
                         />
                       ))}
                     </div>
@@ -2736,6 +2783,8 @@ const ProductListPage = () => {
                       priceRange: null,
                       sort: 'relevance'
                     });
+                    setPriceMin('');
+                    setPriceMax('');
                   }}
                   className="w-full py-4 rounded-lg font-semibold text-gray-700 text-sm border-2 border-gray-200 transition-all duration-200 hover:border-gray-300 hover:bg-gray-50 active:scale-95"
                 >
@@ -2759,14 +2808,15 @@ const ProductDetailPage = () => {
 
   // Buscar produto do banco de dados
   const { data: product, isLoading, error } = useProduct(id || '');
-  // Buscar produtos relacionados (featured)
-  const { data: relatedProducts } = useFeaturedProducts();
+  // Buscar sugestões vinculadas ao produto via product_suggestions
+  const { data: relatedProducts } = useProductSuggestions(id || '');
 
   const [selectedSize, setSelectedSize] = useState<string>('');
   const [selectedColor, setSelectedColor] = useState<string>('');
   const [activeImage, setActiveImage] = useState(0);
   const [showError, setShowError] = useState(false);
   const [isLightboxOpen, setIsLightboxOpen] = useState(false);
+  const [touchStartX, setTouchStartX] = useState<number | null>(null);
 
   // Extrair imagens ordenadas
   const images = product?.product_images
@@ -2979,24 +3029,24 @@ const ProductDetailPage = () => {
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.4 }}
-        className="grid grid-cols-1 lg:grid-cols-2 gap-6 sm:gap-8 lg:gap-12 xl:gap-16 mb-10 md:mb-16"
+        className="grid grid-cols-1 lg:grid-cols-2 gap-6 sm:gap-8 lg:gap-10 xl:gap-14 mb-10 md:mb-16 items-start"
       >
         {/* Gallery */}
-        <div className="flex flex-col lg:flex-row gap-3 lg:gap-4 lg:items-start">
+        <div className="flex flex-col lg:flex-row gap-3 lg:gap-4 lg:items-start w-full min-w-0">
           {/* Thumbnails - horizontal em mobile, vertical em desktop */}
           {images.length > 1 && (
-            <div className="order-2 lg:order-1 flex lg:flex-col gap-2 overflow-x-auto lg:overflow-visible pb-1 lg:pb-0 scrollbar-hide lg:w-[68px] flex-shrink-0">
+            <div className="order-2 lg:order-1 flex lg:flex-col gap-2 overflow-x-auto lg:overflow-y-auto lg:overflow-x-visible pb-1 lg:pb-0 scrollbar-hide flex-shrink-0 lg:w-[64px]" style={{ maxHeight: 'min(80vw, 560px)' }}>
               {images.map((img: string, idx: number) => (
                 <motion.button
                   key={idx}
                   whileHover={{ scale: 1.05 }}
                   whileTap={{ scale: 0.95 }}
-                  className={`w-14 sm:w-16 lg:w-[68px] aspect-square flex-shrink-0 rounded-lg transition-all duration-200 overflow-hidden ${
+                  className={`w-14 lg:w-[64px] aspect-square flex-shrink-0 rounded-lg transition-all duration-200 overflow-hidden ${
                     activeImage === idx
                       ? 'ring-2 ring-offset-2 shadow-sm'
                       : 'border border-gray-200 hover:border-gray-300 opacity-60 hover:opacity-100'
                   }`}
-                  style={activeImage === idx ? { ringColor: primaryColor } : {}}
+                  style={activeImage === idx ? { outlineColor: primaryColor } : {}}
                   onClick={() => setActiveImage(idx)}
                 >
                   <img src={img} alt="" className="w-full h-full object-cover object-center" />
@@ -3005,10 +3055,21 @@ const ProductDetailPage = () => {
             </div>
           )}
 
-          {/* Main Image - aspect ratio melhora enquadramento em cada breakpoint */}
+          {/* Main Image - 1:1 fixo, sem overflow em nenhum breakpoint */}
           <div
-            className="order-1 lg:order-2 w-full flex-1 aspect-[3/4] sm:aspect-square lg:aspect-[4/5] overflow-hidden bg-gray-50 rounded-xl relative group cursor-zoom-in"
+            className="order-1 lg:order-2 w-full flex-1 aspect-square overflow-hidden bg-gray-50 rounded-xl relative group cursor-zoom-in"
+            style={{ maxHeight: 'min(80vw, 560px)' }}
             onClick={() => setIsLightboxOpen(true)}
+            onTouchStart={(e) => setTouchStartX(e.touches[0].clientX)}
+            onTouchEnd={(e) => {
+              if (touchStartX === null) return;
+              const diff = touchStartX - e.changedTouches[0].clientX;
+              if (Math.abs(diff) > 40) {
+                if (diff > 0) setActiveImage(i => Math.min(i + 1, images.length - 1));
+                else setActiveImage(i => Math.max(i - 1, 0));
+              }
+              setTouchStartX(null);
+            }}
           >
             {discount > 0 && (
               <motion.span
@@ -3030,6 +3091,28 @@ const ProductDetailPage = () => {
               alt={product.name}
               className="w-full h-full object-cover object-center transition-transform duration-500 group-hover:scale-105"
             />
+
+            {/* Arrow navigation - desktop only */}
+            {images.length > 1 && (
+              <>
+                <button
+                  onClick={(e) => { e.stopPropagation(); setActiveImage(i => Math.max(i - 1, 0)); }}
+                  className={`absolute left-3 top-1/2 -translate-y-1/2 z-10 bg-white/90 backdrop-blur-sm rounded-full p-2 shadow-md transition-all duration-200 hidden md:flex items-center justify-center ${activeImage === 0 ? 'opacity-30 cursor-not-allowed' : 'opacity-0 group-hover:opacity-100 hover:bg-white hover:scale-110'}`}
+                  disabled={activeImage === 0}
+                  aria-label="Imagem anterior"
+                >
+                  <ChevronLeft size={20} className="text-gray-800" />
+                </button>
+                <button
+                  onClick={(e) => { e.stopPropagation(); setActiveImage(i => Math.min(i + 1, images.length - 1)); }}
+                  className={`absolute right-3 top-1/2 -translate-y-1/2 z-10 bg-white/90 backdrop-blur-sm rounded-full p-2 shadow-md transition-all duration-200 hidden md:flex items-center justify-center ${activeImage === images.length - 1 ? 'opacity-30 cursor-not-allowed' : 'opacity-0 group-hover:opacity-100 hover:bg-white hover:scale-110'}`}
+                  disabled={activeImage === images.length - 1}
+                  aria-label="Próxima imagem"
+                >
+                  <ChevronRight size={20} className="text-gray-800" />
+                </button>
+              </>
+            )}
 
             {/* Zoom overlay - desktop only */}
             <div className="absolute inset-0 bg-black/0 group-hover:bg-black/5 transition-colors duration-200 hidden md:flex items-center justify-center">
@@ -3062,11 +3145,11 @@ const ProductDetailPage = () => {
         </div>
 
         {/* Product Info */}
-        <div className="flex flex-col">
+        <div className="flex flex-col min-w-0">
           <h1 className="text-xl sm:text-2xl lg:text-[1.75rem] font-semibold mb-4 leading-snug tracking-tight text-gray-900">{product.name}</h1>
 
-          {/* Preços */}
-          <div className="mb-6 pb-6 border-b border-gray-100">
+          {/* Preços - fundo com tom levemente diferenciado */}
+          <div className="mb-6 pb-6 border-b border-gray-100 rounded-xl bg-gray-50/70 px-4 py-4 -mx-4 sm:mx-0 sm:px-0 sm:py-0 sm:bg-transparent sm:rounded-none">
             <PriceDisplay
               price={price}
               originalPrice={compareAtPrice}
@@ -3077,7 +3160,7 @@ const ProductDetailPage = () => {
             />
           </div>
 
-          <div className="space-y-6 mb-6">
+          <div className="space-y-5 mb-6 rounded-xl bg-gray-50/60 p-4 -mx-4 sm:mx-0 sm:p-0 sm:bg-transparent sm:rounded-none">
             {/* Cores */}
             {colors.length > 0 && (
               <div>
@@ -3251,9 +3334,9 @@ const ProductDetailPage = () => {
         className="max-w-3xl mx-auto mb-10 md:mb-16"
       >
         <ProductAccordion
-          defaultOpen="description"
+          defaultOpen={(product.description || (product.tags && product.tags.length > 0)) ? 'description' : 'shipping'}
           sections={[
-            {
+            ...(product.description || (product.tags && product.tags.length > 0) ? [{
               id: 'description',
               title: 'Descrição do Produto',
               icon: (
@@ -3267,7 +3350,14 @@ const ProductDetailPage = () => {
               ),
               content: (
                 <div>
-                  <p className="mb-4">{product.description || `${product.name} - Produto de alta qualidade.`}</p>
+                  {product.description && (
+                    <p className="text-gray-600 leading-relaxed mb-4">{product.description}</p>
+                  )}
+                  {product.subcategory && (
+                    <p className="text-xs text-gray-400 mb-4">
+                      Categoria: <span className="text-gray-600 font-medium">{product.category}{product.subcategory ? ` › ${product.subcategory}` : ''}</span>
+                    </p>
+                  )}
                   {product.tags && product.tags.length > 0 && (
                     <div className="flex flex-wrap gap-2 mt-4">
                       {product.tags.map((tag: string, i: number) => (
@@ -3287,64 +3377,10 @@ const ProductDetailPage = () => {
                   )}
                 </div>
               )
-            },
-            {
-              id: 'materials',
-              title: 'Materiais & Cuidados',
-              icon: (
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path>
-                </svg>
-              ),
-              content: (
-                <div className="space-y-3">
-                  <div>
-                    <p className="font-semibold mb-2">Composição:</p>
-                    <p className="text-gray-600">• 100% Algodão Premium</p>
-                    <p className="text-gray-600">• Tecido respirável e confortável</p>
-                  </div>
-                  <div>
-                    <p className="font-semibold mb-2">Cuidados:</p>
-                    <p className="text-gray-600">• Lavar à máquina em água fria</p>
-                    <p className="text-gray-600">• Não usar alvejante</p>
-                    <p className="text-gray-600">• Secar à sombra</p>
-                  </div>
-                </div>
-              )
-            },
-            {
-              id: 'size-guide',
-              title: 'Tabela de Medidas',
-              icon: (
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
-                  <line x1="3" y1="9" x2="21" y2="9"></line>
-                  <line x1="9" y1="21" x2="9" y2="9"></line>
-                </svg>
-              ),
-              content: (
-                <div className="overflow-x-auto">
-                  <table className="w-full text-sm">
-                    <thead>
-                      <tr className="border-b">
-                        <th className="text-left py-2 px-3">Tamanho</th>
-                        <th className="text-left py-2 px-3">Busto (cm)</th>
-                        <th className="text-left py-2 px-3">Comprimento (cm)</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      <tr className="border-b"><td className="py-2 px-3">P</td><td className="py-2 px-3">88-92</td><td className="py-2 px-3">68</td></tr>
-                      <tr className="border-b"><td className="py-2 px-3">M</td><td className="py-2 px-3">93-97</td><td className="py-2 px-3">70</td></tr>
-                      <tr className="border-b"><td className="py-2 px-3">G</td><td className="py-2 px-3">98-102</td><td className="py-2 px-3">72</td></tr>
-                      <tr><td className="py-2 px-3">GG</td><td className="py-2 px-3">103-107</td><td className="py-2 px-3">74</td></tr>
-                    </tbody>
-                  </table>
-                </div>
-              )
-            },
+            }] : []),
             {
               id: 'shipping',
-              title: 'Envio & Devoluções',
+              title: 'Calcular Frete',
               icon: (
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                   <rect x="1" y="3" width="15" height="13"></rect>
@@ -3354,19 +3390,7 @@ const ProductDetailPage = () => {
                 </svg>
               ),
               content: (
-                <div className="space-y-3">
-                  <div>
-                    <p className="font-semibold mb-2">Prazo de Entrega:</p>
-                    <p className="text-gray-600">• Capitais: 3-5 dias úteis</p>
-                    <p className="text-gray-600">• Interior: 5-10 dias úteis</p>
-                  </div>
-                  <div>
-                    <p className="font-semibold mb-2">Devoluções:</p>
-                    <p className="text-gray-600">• Até 30 dias para troca ou devolução</p>
-                    <p className="text-gray-600">• Frete de devolução grátis</p>
-                    <p className="text-gray-600">• Produto deve estar sem uso e com etiquetas</p>
-                  </div>
-                </div>
+                <ShippingCalculator cartTotal={price} />
               )
             }
           ]}
