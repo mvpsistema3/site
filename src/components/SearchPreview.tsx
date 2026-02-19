@@ -2,6 +2,7 @@ import React from 'react';
 import { useFuzzySearch } from '../hooks/useFuzzySearch';
 import { useBrandNavigate } from './BrandLink';
 import { useBrandColors } from '../hooks/useTheme';
+import { useAuth } from '../contexts/AuthContext';
 
 interface SearchPreviewProps {
   searchQuery: string;
@@ -17,9 +18,12 @@ export const SearchPreview: React.FC<SearchPreviewProps> = ({
   const { products, isLoading } = useFuzzySearch(searchQuery);
   const navigate = useBrandNavigate();
   const { primaryColor } = useBrandColors();
+  const { user } = useAuth();
 
-  // Mostrar apenas os primeiros 6 resultados
-  const previewProducts = products.slice(0, 6);
+  // Filtrar produtos de tabaco para usuários não logados e mostrar primeiros 6
+  const previewProducts = products
+    .filter((p: any) => !p.is_tabaco || user)
+    .slice(0, 6);
 
   if (!searchQuery || searchQuery.trim().length < 2) {
     return null;
@@ -112,7 +116,7 @@ export const SearchPreview: React.FC<SearchPreviewProps> = ({
             })}
 
             {/* Ver todos os resultados */}
-            {products.length > 6 && (
+            {products.filter((p: any) => !p.is_tabaco || user).length > 6 && (
               <div className="border-t mt-2 pt-2 px-4 pb-3">
                 <button
                   onClick={() => {
@@ -122,7 +126,7 @@ export const SearchPreview: React.FC<SearchPreviewProps> = ({
                   className="w-full text-center text-sm font-medium py-2 rounded transition-colors hover:bg-gray-50"
                   style={{ color: primaryColor }}
                 >
-                  Ver todos os {products.length} resultados →
+                  Ver todos os {products.filter((p: any) => !p.is_tabaco || user).length} resultados →
                 </button>
               </div>
             )}

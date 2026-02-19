@@ -16,7 +16,7 @@ import { AuthProvider } from './src/contexts/AuthContext';
 import { queryClient } from './src/lib/queryClient';
 import { useFeaturedProducts, useProducts, useProduct, useProductsByCategorySlug, useProductSuggestions } from './src/hooks/useProducts';
 import { useFuzzySearch } from './src/hooks/useFuzzySearch';
-import { useHeroBanner } from './src/hooks/useBanners';
+import { useHeroCollection, useProductsByCollectionSlug } from './src/hooks/useCollections';
 import { useCategories, useCategoryTree, useMenuCategories, useTabacariaCategories, Category } from './src/hooks/useCategories';
 import { useFAQs } from './src/hooks/useFAQs';
 import { useGroupedFooterLinks } from './src/hooks/useFooterLinks';
@@ -1960,7 +1960,7 @@ const HomePage = () => {
   const { brand, brandConfig, isLoading: brandLoading } = useBrand();
   const { primaryColor } = useBrandColors();
   const { user } = useAuth();
-  const { data: heroBanner, isLoading: bannerLoading } = useHeroBanner();
+  const { data: heroCollection } = useHeroCollection();
   const { data: featuredProducts } = useFeaturedProducts();
   const navigate = useNavigate();
   const { data: tabacariaCategories, isLoading: tabacariaLoading } = useTabacariaCategories();
@@ -1991,31 +1991,40 @@ const HomePage = () => {
 
   return (
     <main className="animate-fade-in">
-      {/* 1. Hero Banner - Dinâmico */}
-      {heroBanner && (
+      {/* 1. Hero Banner - Coleção Ativa */}
+      {heroCollection && (
         <section className="relative h-[500px] md:h-[600px] lg:h-[700px] w-full overflow-hidden bg-gray-900">
+          {/* Imagem desktop */}
           <img
-            src={heroBanner.image_url}
-            alt={heroBanner.title || "Hero"}
-            className="absolute inset-0 w-full h-full object-cover opacity-60"
+            src={heroCollection.image_url || ''}
+            alt={heroCollection.name || "Hero"}
+            className="absolute inset-0 w-full h-full object-cover opacity-60 hidden md:block"
+          />
+          {/* Imagem mobile (fallback para desktop se não houver) */}
+          <img
+            src={heroCollection.mobile_image_url || heroCollection.image_url || ''}
+            alt={heroCollection.name || "Hero"}
+            className="absolute inset-0 w-full h-full object-cover opacity-60 md:hidden"
           />
           <div className="absolute inset-0 flex flex-col justify-center items-center text-center p-6">
             <h1 className="font-sans text-6xl md:text-8xl text-white mb-6 drop-shadow-xl rotate-[-2deg]">
-              {heroBanner.title} <span style={{ color: primaryColor }}>{heroBanner.subtitle}</span>
+              {heroCollection.name}
             </h1>
-            {heroBanner.description && (
+            {heroCollection.description && (
               <p className="text-white text-lg md:text-xl font-bold tracking-widest uppercase mb-8 max-w-2xl drop-shadow-md">
-                {heroBanner.description}
+                {heroCollection.description}
               </p>
             )}
-            <BrandLink to={heroBanner.cta_link || "/shop"}>
-              <button
-                className="font-bold uppercase tracking-wide px-12 py-4 text-lg text-white rounded transition-all duration-300 hover:bg-black"
-                style={{ backgroundColor: primaryColor }}
-              >
-                {heroBanner.cta_text || "VER MAIS"}
-              </button>
-            </BrandLink>
+            {heroCollection.show_button && (
+              <BrandLink to={heroCollection.redirect_url || `/shop?collection=${heroCollection.slug}`}>
+                <button
+                  className="font-bold uppercase tracking-wide px-12 py-4 text-lg text-white rounded transition-all duration-300 hover:bg-black"
+                  style={{ backgroundColor: primaryColor }}
+                >
+                  {heroCollection.button_text || "VER COLEÇÃO"}
+                </button>
+              </BrandLink>
+            )}
           </div>
         </section>
       )}
@@ -2093,8 +2102,8 @@ const HomePage = () => {
         </div>
       </section>
 
-      {/* 6. Seção TABACARIA - Produtos com tabs de categoria */}
-      {tabacariaCategories && tabacariaCategories.length > 0 && (
+      {/* 6. Seção TABACARIA - Produtos com tabs de categoria (apenas logados) */}
+      {user && tabacariaCategories && tabacariaCategories.length > 0 && (
         <ProductSectionWithTabs
           title="TABACARIA"
           categories={tabacariaCategories}
@@ -2144,10 +2153,12 @@ const ProductListPage = () => {
   // Extrair parâmetros da URL
   const searchParams = new URLSearchParams(location.search);
   const categorySlug = searchParams.get('category');
+  const collectionSlug = searchParams.get('collection');
 
   // Buscar produtos do banco de dados
   const { data: allProducts, isLoading: loadingAll } = useProducts();
   const { data: categoryProducts, isLoading: loadingCategory } = useProductsByCategorySlug(categorySlug || '');
+  const { data: collectionProducts, isLoading: loadingCollection } = useProductsByCollectionSlug(collectionSlug || '');
   const { data: categories } = useCategoryTree(); // Hierárquico para sidebar
 
   // Busca fuzzy (só quando houver query)
@@ -2164,11 +2175,11 @@ const ProductListPage = () => {
 
   const [isMobileFiltersOpen, setIsMobileFiltersOpen] = useState(false);
 
-  // Usar produtos da busca se estiver buscando, senão usa categoria ou todos
+  // Usar produtos da busca se estiver buscando, senão usa coleção, categoria ou todos
   const baseProducts = isSearching
     ? searchResults
-    : (categorySlug ? (categoryProducts || []) : (allProducts || []));
-  const isLoading = isSearching ? loadingSearch : (categorySlug ? loadingCategory : loadingAll);
+    : (collectionSlug ? (collectionProducts || []) : (categorySlug ? (categoryProducts || []) : (allProducts || [])));
+  const isLoading = isSearching ? loadingSearch : (collectionSlug ? loadingCollection : (categorySlug ? loadingCategory : loadingAll));
 
   // Cores com hex real das variantes
   const availableColors = [...new Map(
@@ -2259,7 +2270,9 @@ const ProductListPage = () => {
   const currentCategory = categorySlug ? findCategoryInTree(categories || [], categorySlug) : undefined;
   const pageTitle = isSearching
     ? `Resultados para "${searchQuery}"`
-    : (currentCategory?.name || 'PRODUTOS');
+    : (collectionSlug
+      ? collectionSlug.replace(/-/g, ' ').replace(/\b\w/g, c => c.toUpperCase())
+      : (currentCategory?.name || 'PRODUTOS'));
 
   if (isLoading) {
     return <ShopPageSkeleton />;

@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useEffect, useState, useCallback } from 'react';
 import { User, Session, AuthError } from '@supabase/supabase-js';
 import { supabase } from '../lib/supabase';
+import { queryClient } from '../lib/queryClient';
 import { BRAND_CONFIGS } from '../config/brands';
 import { getCurrentBrand } from '../lib/brand-detection';
 
@@ -342,6 +343,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   // Logout
   const signOut = async () => {
+    // Limpar estado local imediatamente para não depender do onAuthStateChange
+    setUser(null);
+    setProfile(null);
+    setUserBrands([]);
+    setSession(null);
+    // Limpar cache do React Query (pedidos, favoritos, perfil, etc.)
+    queryClient.clear();
     try {
       await supabase.auth.signOut();
     } catch (error) {

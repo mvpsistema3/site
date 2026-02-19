@@ -30,15 +30,16 @@ export const UserMenu: React.FC = () => {
     };
   }, [isOpen]);
 
-  const handleSignOut = () => {
+  const handleSignOut = async () => {
     setIsOpen(false);
-    addToast('Você saiu da sua conta. Até logo!', 'info');
     const brandPrefix = getBrandUrlPrefix();
+    try {
+      await signOut();
+    } catch {
+      // mesmo se falhar, redireciona para home
+    }
     window.location.hash = '#' + brandPrefix + '/';
-    signOut().catch(() => {});
-    setTimeout(() => {
-      window.location.reload();
-    }, 1000);
+    addToast('Você saiu da sua conta. Até logo!', 'info');
   };
 
   if (!user) return null;

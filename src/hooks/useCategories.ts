@@ -246,8 +246,8 @@ export function useSubcategories(parentId: string | null) {
 }
 
 /**
- * Busca categorias de tabacaria para homepage
- * Filtra por is_tabacaria = true e apenas categorias com produtos vinculados
+ * Busca categorias de tabacaria em destaque para homepage
+ * Filtra por is_tabacaria = true, featured = true e apenas categorias com produtos vinculados
  */
 export function useTabacariaCategories() {
   const { brand } = useBrand();
@@ -264,6 +264,7 @@ export function useTabacariaCategories() {
         .is('deleted_at', null)
         .eq('active', true)
         .eq('is_tabacaria', true)
+        .eq('featured', true)
         .eq('brand_id', brand.id)
         .order('position', { ascending: true })
         .order('name', { ascending: true });

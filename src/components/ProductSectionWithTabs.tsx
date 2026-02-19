@@ -4,6 +4,7 @@ import { ChevronRight, ChevronLeft } from 'lucide-react';
 import { Category } from '../hooks/useCategories';
 import { useProductsByCategorySlug } from '../hooks/useProducts';
 import { useBrandColors } from '../hooks/useTheme';
+import { useAuth } from '../contexts/AuthContext';
 import { BrandLink } from './BrandLink';
 import { ProductCard } from './ProductCard';
 import { Product } from '../../types';
@@ -75,6 +76,7 @@ export function ProductSectionWithTabs({
   bgColor = 'transparent',
 }: ProductSectionWithTabsProps) {
   const { primaryColor } = useBrandColors();
+  const { user } = useAuth();
   const navigate = useNavigate();
   const [selectedCategorySlug, setSelectedCategorySlug] = useState<string | null>(
     defaultCategorySlug || (categories.length > 0 ? categories[0]?.slug : null)
@@ -96,9 +98,13 @@ export function ProductSectionWithTabs({
   const { data: rawProducts, isLoading } = useProductsByCategorySlug(selectedCategorySlug || '');
 
   // Normalizar produtos para formato esperado pelo ProductCard
+  // Filtra produtos de tabaco para usuários não logados
   const products = useMemo(() => {
-    return (rawProducts || []).map(normalizeProduct).filter(Boolean);
-  }, [rawProducts]);
+    return (rawProducts || [])
+      .filter((p: any) => !p.is_tabaco || user)
+      .map(normalizeProduct)
+      .filter(Boolean);
+  }, [rawProducts, user]);
 
   // Limitar quantidade de produtos exibidos
   const displayProducts = products.slice(0, maxProducts);
