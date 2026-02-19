@@ -23,6 +23,7 @@ export type Product = {
   sizes: string[];
   stock: number;
   featured: boolean;
+  is_tabaco?: boolean;
   discount?: number;
   rating: number;
   reviews: number;

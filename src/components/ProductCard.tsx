@@ -1,9 +1,11 @@
 import React from 'react';
 import { Product } from '../../types';
 import { useBrand } from '../contexts/BrandContext';
+import { useAuth } from '../contexts/AuthContext';
 import { FeatureFlag } from './FeatureFlag';
 import { Heart, ShoppingBag, Star, Eye } from 'lucide-react';
 import { useFeatureFlag } from '../hooks/useFeatureFlag';
+import { useIsFavorite, useToggleFavorite } from '../hooks/useFavorites';
 
 interface ProductCardProps {
   product: Product;
@@ -20,6 +22,9 @@ export const ProductCard: React.FC<ProductCardProps> = ({
 }) => {
   const { brandConfig } = useBrand();
   const { features } = useFeatureFlag();
+  const { user } = useAuth();
+  const isFavorite = useIsFavorite(product.id);
+  const { mutate: toggleFavorite } = useToggleFavorite();
 
   const formatPrice = (price: number) => {
     return new Intl.NumberFormat('pt-BR', {
@@ -53,11 +58,18 @@ export const ProductCard: React.FC<ProductCardProps> = ({
         {/* Wishlist - Feature Flag */}
         <FeatureFlag feature="wishlist">
           <button
-            onClick={() => onAddToWishlist?.(product)}
+            onClick={() => {
+              if (!user) {
+                window.dispatchEvent(new CustomEvent('open-login-modal'));
+                return;
+              }
+              toggleFavorite(product.id);
+              onAddToWishlist?.(product);
+            }}
             className="p-2 bg-white rounded-full shadow-md hover:bg-gray-100 transition-colors"
-            title="Adicionar aos favoritos"
+            title={isFavorite ? "Remover dos favoritos" : "Adicionar aos favoritos"}
           >
-            <Heart className="w-4 h-4" />
+            <Heart className={`w-4 h-4 transition-colors duration-200 ${isFavorite ? 'fill-red-500 text-red-500' : ''}`} />
           </button>
         </FeatureFlag>
 

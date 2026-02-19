@@ -10,6 +10,7 @@ export interface Product {
   rating: number;
   reviews: number;
   isNew?: boolean;
+  is_tabaco?: boolean;
   discount?: number;
 }
 

@@ -1,28 +1,39 @@
 import React, { createContext, useContext, useEffect, useState, useCallback } from 'react';
 import { User, Session, AuthError } from '@supabase/supabase-js';
 import { supabase } from '../lib/supabase';
+import { BRAND_CONFIGS } from '../config/brands';
+import { getCurrentBrand } from '../lib/brand-detection';
 
 interface UserProfile {
   id: string;
   email: string | null;
   display_name: string | null;
-  avatar_url: string | null;
-  role: 'user' | 'admin';
+  phone: string | null;
+  cpf: string | null;
 }
 
-interface UserBrand {
+interface CustomerBrand {
   brand_slug: string;
   created_at: string;
+}
+
+interface SignUpResult {
+  error: AuthError | null;
+  linked?: {
+    existingBrands: string[]; // nomes das marcas onde já tinha conta
+    newBrand: string;         // nome da marca sendo vinculada agora
+    alreadyLinked: boolean;   // true se já estava vinculado a esta marca
+  };
 }
 
 interface AuthContextType {
   user: User | null;
   profile: UserProfile | null;
-  userBrands: UserBrand[];
+  userBrands: CustomerBrand[];
   session: Session | null;
   loading: boolean;
   signIn: (email: string, password: string) => Promise<{ error: AuthError | null }>;
-  signUp: (email: string, password: string, displayName?: string, brandSlug?: string) => Promise<{ error: AuthError | null }>;
+  signUp: (email: string, password: string, displayName?: string, brandSlug?: string) => Promise<SignUpResult>;
   signInWithMagicLink: (email: string) => Promise<{ error: AuthError | null }>;
   signOut: () => Promise<void>;
   refreshProfile: () => Promise<void>;
@@ -34,7 +45,7 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);
   const [profile, setProfile] = useState<UserProfile | null>(null);
-  const [userBrands, setUserBrands] = useState<UserBrand[]>([]);
+  const [userBrands, setUserBrands] = useState<CustomerBrand[]>([]);
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -42,65 +53,106 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const fetchProfile = useCallback(async (userId: string) => {
     try {
       const { data, error } = await supabase
-        .from('users')
-        .select('id, email, display_name, avatar_url, role')
+        .from('customer_profiles')
+        .select('id, email, display_name, phone, cpf')
         .eq('id', userId)
-        .single();
+        .maybeSingle();
 
       if (error) {
         console.error('Erro ao buscar perfil:', error);
         return null;
       }
 
-      return data as UserProfile;
+      return data as UserProfile | null;
     } catch (error) {
       console.error('Erro ao buscar perfil:', error);
       return null;
     }
   }, []);
 
-  // Função para buscar as marcas do usuário
-  const fetchUserBrands = useCallback(async (userId: string) => {
+  // Função para buscar as marcas do cliente
+  const fetchCustomerBrands = useCallback(async (userId: string) => {
     try {
       const { data, error } = await supabase
-        .from('user_brands')
+        .from('customer_brands')
         .select('brand_slug, created_at')
         .eq('user_id', userId);
 
       if (error) {
-        console.error('Erro ao buscar marcas do usuário:', error);
+        console.error('Erro ao buscar marcas do cliente:', error);
         return [];
       }
 
-      return (data || []) as UserBrand[];
+      return (data || []) as CustomerBrand[];
     } catch (error) {
-      console.error('Erro ao buscar marcas do usuário:', error);
+      console.error('Erro ao buscar marcas do cliente:', error);
       return [];
     }
   }, []);
 
   // Função para atualizar o estado do usuário
   const updateUserState = useCallback(async (session: Session | null) => {
-    if (session?.user) {
-      setUser(session.user);
-      setSession(session);
+    try {
+      if (session?.user) {
+        setUser(session.user);
+        setSession(session);
 
-      // Buscar perfil e marcas do usuário
-      const [userProfile, brands] = await Promise.all([
-        fetchProfile(session.user.id),
-        fetchUserBrands(session.user.id),
-      ]);
+        // Buscar perfil e marcas do cliente
+        const [userProfile, fetchedBrands] = await Promise.all([
+          fetchProfile(session.user.id),
+          fetchCustomerBrands(session.user.id),
+        ]);
+        let brands = fetchedBrands;
 
-      setProfile(userProfile);
-      setUserBrands(brands);
-    } else {
-      setUser(null);
-      setProfile(null);
-      setUserBrands([]);
-      setSession(null);
+        // Auto-criar perfil de cliente se não existir (ex: usuário legado)
+        if (!userProfile) {
+          const displayName = session.user.user_metadata?.display_name || null;
+          const { data: newProfile, error: profileError } = await supabase
+            .from('customer_profiles')
+            .upsert({
+              id: session.user.id,
+              email: session.user.email,
+              display_name: displayName,
+            }, { onConflict: 'id' })
+            .select('id, email, display_name, phone, cpf')
+            .maybeSingle();
+
+          if (profileError) {
+            console.error('Erro ao auto-criar perfil:', profileError);
+          }
+
+          setProfile(newProfile as UserProfile | null);
+        } else {
+          setProfile(userProfile);
+        }
+
+        // Auto-vincular à marca atual se ainda não estiver vinculado
+        const currentBrandSlug = getCurrentBrand();
+        if (currentBrandSlug && !brands.some(b => b.brand_slug === currentBrandSlug)) {
+          const { error: linkError } = await supabase
+            .from('customer_brands')
+            .upsert({
+              user_id: session.user.id,
+              brand_slug: currentBrandSlug,
+            }, { onConflict: 'user_id,brand_slug' });
+
+          if (!linkError) {
+            brands = [...brands, { brand_slug: currentBrandSlug, created_at: new Date().toISOString() }];
+          }
+        }
+        setUserBrands(brands);
+      } else {
+        setUser(null);
+        setProfile(null);
+        setUserBrands([]);
+        setSession(null);
+      }
+    } catch (error) {
+      console.error('Erro ao atualizar estado do usuário:', error);
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
-  }, [fetchProfile, fetchUserBrands]);
+  }, [fetchProfile, fetchCustomerBrands]);
 
   // Verificar sessão existente ao carregar
   useEffect(() => {
@@ -118,7 +170,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     // Listener de mudanças de auth
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
-      await updateUserState(session);
+      try {
+        await updateUserState(session);
+      } catch (error) {
+        console.error('Erro no listener de autenticação:', error);
+      }
     });
 
     return () => {
@@ -155,20 +211,48 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
       // Se o usuário já existe, tentar associar à nova marca
       if (error && error.message.includes('already registered')) {
+        const targetSlug = brandSlug || 'sesh';
+        const newBrandName = BRAND_CONFIGS[targetSlug]?.name || targetSlug;
+
         // Buscar usuário existente por email
-        const { data: existingUsers } = await supabase
-          .from('users')
+        const { data: existingUser } = await supabase
+          .from('customer_profiles')
           .select('id')
           .eq('email', email)
-          .single();
+          .maybeSingle();
 
-        if (existingUsers) {
-          // Associar usuário à nova marca
+        if (existingUser) {
+          // Buscar marcas onde já está vinculado
+          const { data: existingBrandsData } = await supabase
+            .from('customer_brands')
+            .select('brand_slug')
+            .eq('user_id', existingUser.id);
+
+          const existingBrandSlugs = (existingBrandsData || []).map(b => b.brand_slug);
+          const existingBrandNames = existingBrandSlugs.map(
+            slug => BRAND_CONFIGS[slug]?.name || slug
+          );
+
+          // Verificar se já está vinculado a esta marca
+          if (existingBrandSlugs.includes(targetSlug)) {
+            return {
+              error: {
+                message: 'Você já possui cadastro! Use "Entrar" para acessar com sua senha.'
+              } as AuthError,
+              linked: {
+                existingBrands: existingBrandNames,
+                newBrand: newBrandName,
+                alreadyLinked: true,
+              },
+            };
+          }
+
+          // Associar cliente à nova marca
           const { error: brandError } = await supabase
-            .from('user_brands')
+            .from('customer_brands')
             .insert({
-              user_id: existingUsers.id,
-              brand_slug: brandSlug || 'sesh',
+              user_id: existingUser.id,
+              brand_slug: targetSlug,
             });
 
           if (brandError && !brandError.message.includes('duplicate')) {
@@ -176,41 +260,59 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             return {
               error: {
                 message: 'Erro ao associar à marca. Entre com sua senha para acessar.'
-              } as AuthError
+              } as AuthError,
             };
           }
 
+          // Vinculação feita com sucesso
           return {
-            error: {
-              message: 'Você já possui cadastro! Use "Entrar" para acessar com sua senha.'
-            } as AuthError
+            error: null,
+            linked: {
+              existingBrands: existingBrandNames,
+              newBrand: newBrandName,
+              alreadyLinked: false,
+            },
           };
         }
+
+        // Usuário existe no Auth mas não tem customer_profiles ainda (legado).
+        // Ao fazer login, o perfil será criado e a marca vinculada automaticamente.
+        return {
+          error: {
+            message: `Você já possui cadastro! Use "Entrar" para acessar. Ao entrar, sua conta será vinculada à ${newBrandName} automaticamente.`
+          } as AuthError,
+          linked: {
+            existingBrands: [],
+            newBrand: newBrandName,
+            alreadyLinked: true,
+          },
+        };
       }
 
       if (error) return { error };
 
-      // Criar perfil do usuário na tabela users
+      // Criar perfil do cliente na tabela customer_profiles
+      // Usa upsert para evitar conflito com onAuthStateChange que roda em paralelo
       if (data.user) {
         const { error: profileError } = await supabase
-          .from('users')
-          .insert({
+          .from('customer_profiles')
+          .upsert({
             id: data.user.id,
             email: data.user.email,
             display_name: displayName,
-          });
+          }, { onConflict: 'id' });
 
         if (profileError) {
           console.error('Erro ao criar perfil:', profileError);
         }
 
-        // Associar usuário à marca
+        // Associar cliente à marca
         const { error: brandError } = await supabase
-          .from('user_brands')
-          .insert({
+          .from('customer_brands')
+          .upsert({
             user_id: data.user.id,
             brand_slug: brandSlug || 'sesh',
-          });
+          }, { onConflict: 'user_id,brand_slug' });
 
         if (brandError) {
           console.error('Erro ao associar marca:', brandError);
@@ -252,7 +354,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     if (user) {
       const [userProfile, brands] = await Promise.all([
         fetchProfile(user.id),
-        fetchUserBrands(user.id),
+        fetchCustomerBrands(user.id),
       ]);
       setProfile(userProfile);
       setUserBrands(brands);

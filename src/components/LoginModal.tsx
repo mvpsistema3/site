@@ -3,6 +3,7 @@ import { X, Mail, Lock, User, Loader2, Eye, EyeOff } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { useBrand } from '../contexts/BrandContext';
 import { useBrandColors } from '../hooks/useTheme';
+import { useToastStore } from '../stores/toastStore';
 
 interface LoginModalProps {
   isOpen: boolean;
@@ -15,6 +16,7 @@ export const LoginModal: React.FC<LoginModalProps> = ({ isOpen, onClose }) => {
   const { signIn, signUp } = useAuth();
   const { currentSlug } = useBrand();
   const { primaryColor } = useBrandColors();
+  const addToast = useToastStore((s) => s.addToast);
 
   const [view, setView] = useState<ModalView>('login');
   const [email, setEmail] = useState('');
@@ -51,6 +53,7 @@ export const LoginModal: React.FC<LoginModalProps> = ({ isOpen, onClose }) => {
     } else {
       setLoading(false);
       handleClose();
+      addToast('Login realizado com sucesso! Bem-vindo de volta.', 'success');
     }
   };
 
@@ -65,18 +68,51 @@ export const LoginModal: React.FC<LoginModalProps> = ({ isOpen, onClose }) => {
       return;
     }
 
-    const { error: signUpError } = await signUp(email, password, displayName, currentSlug);
+    const { error: signUpError, linked } = await signUp(email, password, displayName, currentSlug);
 
+    setLoading(false);
+
+    // Caso: usuário já existia e já estava vinculado a esta marca
+    if (linked?.alreadyLinked) {
+      const brandInfo = linked.existingBrands.length > 0
+        ? `Esse email já está cadastrado na ${linked.existingBrands.join(', ')}.`
+        : 'Esse email já está cadastrado em nosso grupo.';
+      setSuccessMessage(
+        `${brandInfo} Nossas marcas pertencem ao mesmo grupo — clique em "Entrar" e use a mesma senha.`
+      );
+      setTimeout(() => {
+        setView('login');
+        setSuccessMessage(null);
+      }, 5000);
+      return;
+    }
+
+    // Caso: usuário já existia e foi vinculado à nova marca
+    if (linked && !linked.alreadyLinked) {
+      const fromBrands = linked.existingBrands.length > 0
+        ? `Sua conta da ${linked.existingBrands.join(', ')} foi vinculada à ${linked.newBrand}!`
+        : `Sua conta foi vinculada à ${linked.newBrand}!`;
+      setSuccessMessage(
+        `${fromBrands} Nossas marcas pertencem ao mesmo grupo — clique em "Entrar" e use a mesma senha.`
+      );
+      setTimeout(() => {
+        setView('login');
+        setSuccessMessage(null);
+      }, 5000);
+      return;
+    }
+
+    // Caso: erro genérico
     if (signUpError) {
       setError(signUpError.message || 'Erro ao criar conta. Tente novamente.');
-      setLoading(false);
-    } else {
-      setSuccessMessage('Conta criada! Verifique seu email para confirmar.');
-      setLoading(false);
-      setTimeout(() => {
-        handleClose();
-      }, 3000);
+      return;
     }
+
+    // Caso: conta nova criada com sucesso
+    setSuccessMessage('Conta criada! Verifique seu email para confirmar.');
+    setTimeout(() => {
+      handleClose();
+    }, 3000);
   };
 
   if (!isOpen) return null;

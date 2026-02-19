@@ -1,14 +1,14 @@
 import React, { useState, useEffect, createContext, useContext } from 'react';
 import { HashRouter, Routes, Route, Link, useParams, useNavigate, useLocation, useNavigationType } from 'react-router-dom';
 import { QueryClientProvider } from '@tanstack/react-query';
+import { ReactQueryDevtools } from '@tanstack/react-query-devtools';
 import {
   Search, User, ShoppingBag, Heart, Menu, X,
   ChevronLeft, ChevronRight, Star, Truck, ShieldCheck,
   CreditCard, Instagram, Facebook, Youtube, Twitter,
   MapPin, Calendar, Lock, CheckCircle, Minus, Plus, Trash2, HelpCircle,
-  ArrowRight, Package
+  ArrowRight, Package, LogOut
 } from 'lucide-react';
-import { PRODUCTS, CATEGORIES, COLORS, SIZES } from './constants';
 import { Product, CartItem, FilterState } from './types';
 import { BrandProvider, useBrand } from './src/contexts/BrandContext';
 import { SearchProvider, useSearch } from './src/contexts/SearchContext';
@@ -17,11 +17,16 @@ import { queryClient } from './src/lib/queryClient';
 import { useFeaturedProducts, useProducts, useProduct, useProductsByCategorySlug, useProductSuggestions } from './src/hooks/useProducts';
 import { useFuzzySearch } from './src/hooks/useFuzzySearch';
 import { useHeroBanner } from './src/hooks/useBanners';
-import { useCategories, useCategoryTree, useMenuCategories, useFeaturedCategories, useTabacariaCategories, Category } from './src/hooks/useCategories';
+import { useCategories, useCategoryTree, useMenuCategories, useTabacariaCategories, Category } from './src/hooks/useCategories';
 import { useFAQs } from './src/hooks/useFAQs';
 import { useGroupedFooterLinks } from './src/hooks/useFooterLinks';
 import { FAQPage } from './src/pages/FAQPage';
 import { StaticPageRenderer } from './src/pages/StaticPageRenderer';
+import { ProfilePage } from './src/pages/ProfilePage';
+import { OrdersPage } from './src/pages/OrdersPage';
+import { SettingsPage } from './src/pages/SettingsPage';
+import { FavoritesPage } from './src/pages/FavoritesPage';
+import { ProtectedRoute } from './src/components/ProtectedRoute';
 import { useApplyBrandTheme, useBrandColors } from './src/hooks/useTheme';
 import { getBrandUrlPrefix } from './src/lib/brand-detection';
 import { createAsaasPayment, BillingType } from './src/lib/asaas';
@@ -41,6 +46,8 @@ import { LoginModal } from './src/components/LoginModal';
 import { UserMenu } from './src/components/UserMenu';
 import { useAuth } from './src/contexts/AuthContext';
 import { useCartStore } from './src/stores/cartStore';
+import { useToastStore } from './src/stores/toastStore';
+import { useIsFavorite, useToggleFavorite, useFavoritesCount } from './src/hooks/useFavorites';
 import { ImageLightbox } from './src/components/ImageLightbox';
 import { TrustBadges } from './src/components/TrustBadges';
 import { ProductAccordion } from './src/components/ProductAccordion';
@@ -49,6 +56,7 @@ import { ProductDetailSkeleton } from './src/components/ProductDetailSkeleton';
 import { ShopPageSkeleton } from './src/components/ShopPageSkeleton';
 import { MarqueeBanner } from './src/components/MarqueeBanner';
 import { ProductSectionWithTabs } from './src/components/ProductSectionWithTabs';
+import { ToastNotification } from './src/components/ToastNotification';
 import { motion, AnimatePresence } from 'framer-motion';
 
 // --- Contexts ---
@@ -163,6 +171,9 @@ const ProductCard: React.FC<ProductCardProps> = ({ product }) => {
   const [isHovered, setIsHovered] = useState(false);
   const navigate = useBrandNavigate();
   const { primaryColor } = useBrandColors();
+  const { user } = useAuth();
+  const isFavorite = useIsFavorite(product.id);
+  const { mutate: toggleFavorite } = useToggleFavorite();
 
   // Compatibilidade com dados mockados e do Supabase
   const images = product.product_images
@@ -215,12 +226,22 @@ const ProductCard: React.FC<ProductCardProps> = ({ product }) => {
         {/* Wishlist Button - Premium backdrop blur */}
         <button
           className={`absolute top-3 right-3 p-2 bg-white/95 backdrop-blur-sm rounded-full transition-all duration-300 shadow-md hover:scale-110 active:scale-95 min-w-[44px] min-h-[44px] md:min-w-0 md:min-h-0 flex items-center justify-center ${isHovered ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-2 md:opacity-100 md:translate-y-0'}`}
-          onClick={(e) => { e.stopPropagation(); /* Add to wishlist logic */ }}
-          onMouseEnter={(e) => e.currentTarget.querySelector('svg')?.setAttribute('style', `color: ${primaryColor}`)}
-          onMouseLeave={(e) => e.currentTarget.querySelector('svg')?.setAttribute('style', '')}
-          aria-label="Adicionar aos favoritos"
+          onClick={(e) => {
+            e.stopPropagation();
+            if (!user) {
+              // Dispatch event to open login modal
+              window.dispatchEvent(new CustomEvent('open-login-modal'));
+              return;
+            }
+            toggleFavorite(product.id);
+          }}
+          aria-label={isFavorite ? "Remover dos favoritos" : "Adicionar aos favoritos"}
         >
-          <Heart size={18} strokeWidth={2} />
+          <Heart
+            size={18}
+            strokeWidth={2}
+            className={`transition-colors duration-200 ${isFavorite ? 'fill-red-500 text-red-500' : ''}`}
+          />
         </button>
 
         {/* Quick Buy Button - Premium styling */}
@@ -559,7 +580,9 @@ const Header = () => {
   const { brand, brandConfig } = useBrand();
   const { primaryColor } = useBrandColors();
   const { searchQuery, setSearchQuery, clearSearch } = useSearch();
-  const { user } = useAuth();
+  const { user, signOut } = useAuth();
+  const addToast = useToastStore((s: any) => s.addToast);
+  const favoritesCount = useFavoritesCount();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isMobileSearchOpen, setIsMobileSearchOpen] = useState(false);
   const [isScrolled, setIsScrolled] = useState(false);
@@ -568,9 +591,15 @@ const Header = () => {
   const [isLoginModalOpen, setIsLoginModalOpen] = useState(false);
   const navigate = useBrandNavigate();
 
+  // Listen for open-login-modal events (from wishlist buttons when not logged in)
+  useEffect(() => {
+    const handler = () => setIsLoginModalOpen(true);
+    window.addEventListener('open-login-modal', handler);
+    return () => window.removeEventListener('open-login-modal', handler);
+  }, []);
+
   // Limpar busca em mudanças de rota (exceto quando está em /shop)
   useEffect(() => {
-    // Só mantém busca se estiver na página /shop
     if (!location.pathname.includes('/shop')) {
       clearSearch();
     }
@@ -578,7 +607,6 @@ const Header = () => {
     setIsMobileSearchOpen(false);
   }, [location.pathname, location.search]);
 
-  // Função para realizar busca ao pressionar Enter ou clicar na lupa
   const handleSearch = () => {
     if (searchQuery.trim()) {
       navigate('/shop');
@@ -587,140 +615,142 @@ const Header = () => {
     }
   };
 
-  // Mostrar preview quando há query e fechar quando limpa
   useEffect(() => {
     setShowSearchPreview(searchQuery.trim().length >= 2);
   }, [searchQuery]);
 
-  // Categorias do menu (hierárquicas)
   const { data: menuCategories } = useMenuCategories();
 
-  // Nome e logo dinâmicos
   const brandName = brand?.name || brandConfig.name || 'Sesh Store';
-  const displayName = brandName.split(' ')[0]; // Pega só a primeira palavra para o logo
+  const displayName = brandName.split(' ')[0];
   const logoUrl = brand?.theme?.logo || brandConfig.theme.logo;
   const hasLoyalty = brand?.features?.loyalty ?? brandConfig.features.loyalty;
 
   useEffect(() => {
-    const handleScroll = () => setIsScrolled(window.scrollY > 0);
-    window.addEventListener('scroll', handleScroll);
+    const handleScroll = () => setIsScrolled(window.scrollY > 10);
+    window.addEventListener('scroll', handleScroll, { passive: true });
     return () => window.removeEventListener('scroll', handleScroll);
   }, []);
 
+  const isAccountPage = ['/profile', '/orders', '/settings', '/favorites'].some(p => location.pathname.includes(p));
+
+  // Icon button base style
+  const iconBtnClass = "relative w-9 h-9 flex items-center justify-center rounded-full transition-all duration-200 active:scale-90";
+
   return (
     <>
-      {/* Banner Frete Grátis */}
       <FreeShippingBanner />
 
-      <motion.header
-        initial={false}
-        animate={{
-          paddingTop: isScrolled ? '0.75rem' : '1.25rem',
-          paddingBottom: isScrolled ? '0.75rem' : '1.25rem'
-        }}
-        transition={{ duration: 0.3 }}
-        className="sticky top-0 z-40 bg-white/95 backdrop-blur-md border-b transition-all duration-300"
+      <header
+        className="sticky top-0 z-40 transition-all duration-300"
         style={{
-          borderColor: isScrolled ? '#e5e7eb' : 'transparent',
-          boxShadow: isScrolled ? '0 4px 6px -1px rgba(0, 0, 0, 0.05)' : 'none'
+          backgroundColor: isScrolled ? 'rgba(255,255,255,0.97)' : 'rgba(255,255,255,1)',
+          backdropFilter: isScrolled ? 'blur(12px) saturate(1.2)' : 'none',
+          boxShadow: isScrolled
+            ? '0 1px 3px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.04)'
+            : 'none',
         }}
       >
-        <div className="container mx-auto px-6 md:px-8 lg:px-12">
-          <div className="flex items-center justify-between gap-6">
-
-            {/* Mobile Menu Trigger */}
-            <motion.button
-              whileHover={{ scale: 1.1 }}
-              whileTap={{ scale: 0.95 }}
-              className="lg:hidden p-2 -ml-2 text-gray-700 hover:text-gray-900 transition-colors"
-              onClick={() => setIsMobileMenuOpen(true)}
-              aria-label="Menu"
-            >
-              <Menu size={24} strokeWidth={2} />
-            </motion.button>
-
-            {/* Logo - Dinâmico */}
-            <motion.div
-              whileHover={{ scale: 1.05 }}
-              whileTap={{ scale: 0.98 }}
-              className="cursor-pointer"
-              onClick={() => navigate('/')}
-            >
-              {logoUrl && !logoUrl.includes('default') ? (
-                <img
-                  src={logoUrl}
-                  alt={brandName}
-                  className="h-10 md:h-12 lg:h-14 transition-all duration-300 brightness-100 hover:brightness-110"
-                />
-              ) : (
-                <div
-                  className="font-sans text-4xl md:text-5xl lg:text-6xl font-bold tracking-tighter select-none transition-all duration-300"
-                  style={{ color: primaryColor }}
-                >
-                  {displayName}
-                </div>
-              )}
-            </motion.div>
-
-            {/* Desktop Search Bar */}
-            <nav className="hidden lg:flex items-center flex-1 max-w-xl mx-8">
-               <div className="relative group w-full">
-                 <input
-                   type="text"
-                   value={searchQuery}
-                   onChange={(e) => setSearchQuery(e.target.value)}
-                   onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
-                   onFocus={() => searchQuery.trim().length >= 2 && setShowSearchPreview(true)}
-                   placeholder="Buscar produtos..."
-                   className="w-full bg-gray-50 rounded-xl py-3 px-5 pr-12 text-sm text-gray-700 placeholder:text-gray-400 focus:outline-none focus:bg-white border-2 transition-colors duration-300 ease-out"
-                   style={{
-                     borderColor: searchQuery ? `${primaryColor}40` : '#e5e7eb'
-                   }}
-                 />
-                 <button
-                   onClick={handleSearch}
-                   className="absolute right-3 top-1/2 -translate-y-1/2 w-8 h-8 flex items-center justify-center rounded-lg transition-colors duration-300 active:scale-95"
-                   style={{
-                     color: searchQuery ? primaryColor : '#9ca3af'
-                   }}
-                 >
-                   <Search size={18} strokeWidth={2.5} />
-                 </button>
-
-                 {/* Preview de resultados - Desktop */}
-                 {showSearchPreview && (
-                   <SearchPreview
-                     searchQuery={searchQuery}
-                     onClose={() => setShowSearchPreview(false)}
-                     onSelectProduct={() => setShowSearchPreview(false)}
-                   />
-                 )}
-               </div>
-            </nav>
-
-            {/* Action Icons */}
-            <div className="flex items-center gap-2 md:gap-3">
-              {/* Search Mobile */}
+        {/* Main header bar */}
+        <div className="container mx-auto px-4 md:px-6 lg:px-8">
+          <div
+            className="flex items-center justify-between gap-3 lg:gap-6 transition-all duration-300"
+            style={{ height: isScrolled ? '56px' : '64px' }}
+          >
+            {/* Left: Mobile menu + Logo */}
+            <div className="flex items-center gap-2 min-w-0">
               <button
-                className="lg:hidden w-10 h-10 flex items-center justify-center text-gray-600 hover:text-gray-900 transition-colors duration-200 active:scale-95"
+                className="lg:hidden w-9 h-9 flex items-center justify-center rounded-full text-gray-600 hover:bg-gray-100 transition-colors active:scale-90"
+                onClick={() => setIsMobileMenuOpen(true)}
+                aria-label="Menu"
+              >
+                <Menu size={20} strokeWidth={2} />
+              </button>
+
+              <div
+                className="cursor-pointer flex-shrink-0"
+                onClick={() => navigate('/')}
+              >
+                {logoUrl && !logoUrl.includes('default') ? (
+                  <img
+                    src={logoUrl}
+                    alt={brandName}
+                    className="transition-all duration-300"
+                    style={{ height: isScrolled ? '32px' : '36px' }}
+                  />
+                ) : (
+                  <span
+                    className="font-sans font-bold tracking-tight select-none transition-all duration-300"
+                    style={{
+                      color: primaryColor,
+                      fontSize: isScrolled ? '1.5rem' : '1.75rem',
+                      lineHeight: 1.1,
+                    }}
+                  >
+                    {displayName}
+                  </span>
+                )}
+              </div>
+            </div>
+
+            {/* Center: Desktop search */}
+            <div className="hidden lg:block flex-1 max-w-lg mx-4">
+              <div className="relative">
+                <input
+                  type="text"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
+                  onFocus={() => searchQuery.trim().length >= 2 && setShowSearchPreview(true)}
+                  placeholder="Buscar produtos..."
+                  className="w-full rounded-full py-2.5 pl-10 pr-4 text-[13px] text-gray-700 placeholder:text-gray-400 bg-gray-50/80 border border-gray-200/80 focus:outline-none focus:border-gray-300 focus:bg-white focus:shadow-sm transition-all duration-200"
+                  style={{
+                    borderColor: searchQuery ? `${primaryColor}50` : undefined,
+                  }}
+                />
+                <button
+                  onClick={handleSearch}
+                  className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 transition-colors"
+                >
+                  <Search size={16} strokeWidth={2} />
+                </button>
+
+                {showSearchPreview && (
+                  <SearchPreview
+                    searchQuery={searchQuery}
+                    onClose={() => setShowSearchPreview(false)}
+                    onSelectProduct={() => setShowSearchPreview(false)}
+                  />
+                )}
+              </div>
+            </div>
+
+            {/* Right: Action icons */}
+            <div className="flex items-center gap-1">
+              {/* Mobile search */}
+              <button
+                className={`lg:hidden ${iconBtnClass} text-gray-600 hover:bg-gray-100`}
                 onClick={() => setIsMobileSearchOpen(!isMobileSearchOpen)}
                 aria-label="Buscar"
               >
-                <Search size={22} strokeWidth={2} />
+                <Search size={18} strokeWidth={2} />
               </button>
 
-              {/* Wishlist */}
+              {/* Favorites (desktop) */}
               <button
-                className="hidden sm:flex w-10 h-10 items-center justify-center text-gray-600 transition-colors duration-200 active:scale-95"
-                onMouseEnter={(e) => {
-                  e.currentTarget.style.color = primaryColor;
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.color = '#4b5563';
-                }}
+                className={`hidden lg:flex ${iconBtnClass} text-gray-500 hover:text-gray-700 hover:bg-gray-50`}
+                onClick={() => navigate('/favorites')}
                 aria-label="Favoritos"
               >
-                <Heart size={22} strokeWidth={2} />
+                <Heart size={18} strokeWidth={2} />
+                {favoritesCount > 0 && (
+                  <span
+                    className="absolute -top-0.5 -right-0.5 text-white text-[9px] font-bold w-4 h-4 flex items-center justify-center rounded-full"
+                    style={{ backgroundColor: primaryColor }}
+                  >
+                    {favoritesCount > 9 ? '9+' : favoritesCount}
+                  </span>
+                )}
               </button>
 
               {/* User/Login */}
@@ -729,35 +759,23 @@ const Header = () => {
               ) : (
                 <button
                   onClick={() => setIsLoginModalOpen(true)}
-                  className="w-10 h-10 flex items-center justify-center text-gray-600 transition-colors duration-200 active:scale-95"
-                  onMouseEnter={(e) => {
-                    e.currentTarget.style.color = primaryColor;
-                  }}
-                  onMouseLeave={(e) => {
-                    e.currentTarget.style.color = '#4b5563';
-                  }}
+                  className={`${iconBtnClass} text-gray-500 hover:text-gray-700 hover:bg-gray-50`}
                   aria-label="Login"
                 >
-                  <User size={22} strokeWidth={2} />
+                  <User size={18} strokeWidth={2} />
                 </button>
               )}
 
               {/* Cart */}
               <button
-                className="relative w-10 h-10 flex items-center justify-center text-gray-600 transition-colors duration-200 active:scale-95"
+                className={`${iconBtnClass} text-gray-500 hover:text-gray-700 hover:bg-gray-50`}
                 onClick={() => setIsCartOpen(true)}
-                onMouseEnter={(e) => {
-                  e.currentTarget.style.color = primaryColor;
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.color = '#4b5563';
-                }}
                 aria-label="Carrinho"
               >
-                <ShoppingBag size={22} strokeWidth={2} />
+                <ShoppingBag size={18} strokeWidth={2} />
                 {cartCount > 0 && (
                   <span
-                    className="absolute -top-1 -right-1 text-white text-[10px] font-bold min-w-[1.25rem] h-5 px-1 flex items-center justify-center rounded-full shadow-lg"
+                    className="absolute -top-0.5 -right-0.5 text-white text-[9px] font-bold min-w-[1rem] h-4 px-0.5 flex items-center justify-center rounded-full"
                     style={{ backgroundColor: primaryColor }}
                   >
                     {cartCount > 99 ? '99+' : cartCount}
@@ -766,215 +784,198 @@ const Header = () => {
               </button>
             </div>
           </div>
+        </div>
 
-          {/* Secondary Nav Row (Desktop Only) - Categorias */}
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            transition={{ delay: 0.2 }}
-            className="hidden lg:flex justify-center mt-6 pt-5 border-t border-gray-100"
-          >
-            <nav className="flex items-center gap-10 text-sm font-semibold uppercase tracking-wider">
-              <BrandLink
-                to="/shop"
-                className="relative py-1 text-gray-700 hover:text-gray-900 transition-colors group"
-              >
-                Todos
-                <span
-                  className="absolute bottom-0 left-0 w-0 h-0.5 transition-all duration-300 group-hover:w-full"
-                  style={{ backgroundColor: primaryColor }}
-                />
-              </BrandLink>
-
-              {menuCategories?.map((category) => (
-                <div key={category.id} className="relative group">
-                  <BrandLink
-                    to={`/shop?category=${category.slug}`}
-                    className="relative py-1 text-gray-700 hover:text-gray-900 transition-colors flex items-center gap-1.5"
-                  >
-                    {category.name}
-                    {category.children && category.children.length > 0 && (
-                      <ChevronRight
-                        size={14}
-                        className="rotate-90 group-hover:rotate-[270deg] transition-transform duration-300"
-                        strokeWidth={2.5}
-                      />
-                    )}
-                    <span
-                      className="absolute bottom-0 left-0 w-0 h-0.5 transition-all duration-300 group-hover:w-full"
-                      style={{ backgroundColor: primaryColor }}
-                    />
-                  </BrandLink>
-
-                  {/* Dropdown Subcategorias */}
-                  {category.children && category.children.length > 0 && (
-                    <div
-                      className="absolute top-full left-0 mt-3 bg-white shadow-xl rounded-xl py-2 min-w-[200px] border border-gray-100 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 z-50 overflow-hidden"
-                      style={{ backdropFilter: 'blur(8px)' }}
-                    >
-                      {category.children.map((sub, index) => (
-                        <React.Fragment key={sub.id}>
-                          <BrandLink
-                            to={`/shop?category=${sub.slug}`}
-                            className="block px-5 py-2.5 text-sm font-medium normal-case text-gray-700 hover:text-gray-900 hover:bg-gray-50 transition-all duration-200 relative group/item"
-                          >
-                            <span
-                              className="absolute left-0 top-1/2 -translate-y-1/2 w-0 h-px transition-all duration-200 group-hover/item:w-3"
-                              style={{ backgroundColor: primaryColor }}
-                            />
-                            <span className="group-hover/item:translate-x-2 transition-transform duration-200 inline-block">
-                              {sub.name}
-                            </span>
-                          </BrandLink>
-                          {index < category.children!.length - 1 && (
-                            <div className="mx-3 h-px bg-gray-100" />
-                          )}
-                        </React.Fragment>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              ))}
-
-              {hasLoyalty && (
+        {/* Category nav row (desktop, hide on account pages) */}
+        {!isAccountPage && (
+          <div className="hidden lg:block border-t border-gray-100/80">
+            <div className="container mx-auto px-4 md:px-6 lg:px-8">
+              <nav className="flex items-center justify-center gap-1 py-0">
                 <BrandLink
-                  to="/club"
-                  className="relative py-1 text-gray-700 hover:text-gray-900 transition-colors group"
+                  to="/shop"
+                  className="relative px-3.5 py-2.5 text-[12px] font-semibold uppercase tracking-widest text-gray-600 hover:text-gray-900 transition-colors group"
                 >
-                  {displayName} Club
+                  Todos
                   <span
-                    className="absolute bottom-0 left-0 w-0 h-0.5 transition-all duration-300 group-hover:w-full"
+                    className="absolute bottom-0 left-1/2 -translate-x-1/2 w-0 h-[2px] rounded-full transition-all duration-300 group-hover:w-3/4"
                     style={{ backgroundColor: primaryColor }}
                   />
                 </BrandLink>
-              )}
-            </nav>
-          </motion.div>
-        </div>
-      </motion.header>
 
-      {/* Mobile Search Bar */}
-      {isMobileSearchOpen && (
-        <>
-          {/* Overlay */}
-          <div
-            className="fixed inset-0 bg-black/30 backdrop-blur-sm z-30 lg:hidden"
-            onClick={() => {
-              setIsMobileSearchOpen(false);
-              setShowSearchPreview(false);
-            }}
-          />
+                {menuCategories?.map((category) => (
+                  <div key={category.id} className="relative group">
+                    <BrandLink
+                      to={`/shop?category=${category.slug}`}
+                      className="relative flex items-center gap-1 px-3.5 py-2.5 text-[12px] font-semibold uppercase tracking-widest text-gray-600 hover:text-gray-900 transition-colors"
+                    >
+                      {category.name}
+                      {category.children && category.children.length > 0 && (
+                        <ChevronRight
+                          size={12}
+                          className="rotate-90 opacity-40 group-hover:opacity-70 group-hover:rotate-[270deg] transition-all duration-300"
+                          strokeWidth={2.5}
+                        />
+                      )}
+                      <span
+                        className="absolute bottom-0 left-1/2 -translate-x-1/2 w-0 h-[2px] rounded-full transition-all duration-300 group-hover:w-3/4"
+                        style={{ backgroundColor: primaryColor }}
+                      />
+                    </BrandLink>
 
-          <div
-            className="lg:hidden bg-white/95 backdrop-blur-md border-b border-gray-200 shadow-xl"
-            style={{ position: 'sticky', top: isScrolled ? '64px' : '80px', zIndex: 40 }}
-          >
-            <div className="container mx-auto px-6 py-5">
-              <div className="relative">
-                <input
-                  type="text"
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter') {
-                      handleSearch();
-                      setIsMobileSearchOpen(false);
-                    }
-                  }}
-                  onFocus={() => searchQuery.trim().length >= 2 && setShowSearchPreview(true)}
-                  placeholder="Buscar produtos..."
-                  autoFocus
-                  className="w-full bg-gray-50 rounded-xl py-3.5 px-5 pr-12 text-sm text-gray-700 placeholder:text-gray-400 focus:outline-none focus:bg-white border-2 transition-colors duration-300 ease-out"
-                  style={{
-                    borderColor: searchQuery ? `${primaryColor}40` : '#e5e7eb'
-                  }}
-                />
-                <button
-                  onClick={() => {
-                    if (searchQuery.trim()) {
-                      handleSearch();
-                    }
-                    setIsMobileSearchOpen(false);
-                  }}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 w-9 h-9 flex items-center justify-center rounded-lg transition-colors duration-300 active:scale-95"
-                  style={{
-                    color: searchQuery ? primaryColor : '#9ca3af'
-                  }}
-                >
-                  <Search size={18} strokeWidth={2.5} />
-                </button>
+                    {category.children && category.children.length > 0 && (
+                      <div className="absolute top-full left-1/2 -translate-x-1/2 pt-1 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 z-50">
+                        <div className="bg-white rounded-lg shadow-lg border border-gray-100 py-1.5 min-w-[180px]">
+                          {category.children.map((sub) => (
+                            <BrandLink
+                              key={sub.id}
+                              to={`/shop?category=${sub.slug}`}
+                              className="block px-4 py-2 text-[12px] font-medium normal-case text-gray-600 hover:text-gray-900 hover:bg-gray-50 transition-colors"
+                            >
+                              {sub.name}
+                            </BrandLink>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                ))}
 
-                {/* Preview de resultados - Mobile */}
-                {showSearchPreview && (
-                  <SearchPreview
-                    searchQuery={searchQuery}
-                    onClose={() => setShowSearchPreview(false)}
-                    onSelectProduct={() => {
-                      setShowSearchPreview(false);
-                      setIsMobileSearchOpen(false);
-                    }}
-                  />
+                {hasLoyalty && (
+                  <BrandLink
+                    to="/club"
+                    className="relative px-3.5 py-2.5 text-[12px] font-semibold uppercase tracking-widest text-gray-600 hover:text-gray-900 transition-colors group"
+                  >
+                    {displayName} Club
+                    <span
+                      className="absolute bottom-0 left-1/2 -translate-x-1/2 w-0 h-[2px] rounded-full transition-all duration-300 group-hover:w-3/4"
+                      style={{ backgroundColor: primaryColor }}
+                    />
+                  </BrandLink>
                 )}
-              </div>
+              </nav>
             </div>
           </div>
-        </>
-      )}
+        )}
+      </header>
 
-      {/* Mobile Drawer Menu */}
+      {/* Mobile search overlay */}
       <AnimatePresence>
-        {isMobileMenuOpen && (
-          <div className="fixed inset-0 z-50 lg:hidden">
-            {/* Backdrop */}
+        {isMobileSearchOpen && (
+          <>
             <motion.div
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              transition={{ duration: 0.3 }}
-              className="absolute inset-0 bg-black/40 backdrop-blur-sm"
+              className="fixed inset-0 bg-black/20 backdrop-blur-sm z-30 lg:hidden"
+              onClick={() => {
+                setIsMobileSearchOpen(false);
+                setShowSearchPreview(false);
+              }}
+            />
+            <motion.div
+              initial={{ opacity: 0, y: -8 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -8 }}
+              transition={{ duration: 0.2 }}
+              className="lg:hidden sticky z-40 bg-white border-b border-gray-100 shadow-sm"
+              style={{ top: isScrolled ? '56px' : '64px' }}
+            >
+              <div className="container mx-auto px-4 py-3">
+                <div className="relative">
+                  <input
+                    type="text"
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        handleSearch();
+                        setIsMobileSearchOpen(false);
+                      }
+                    }}
+                    onFocus={() => searchQuery.trim().length >= 2 && setShowSearchPreview(true)}
+                    placeholder="Buscar produtos..."
+                    autoFocus
+                    className="w-full rounded-full py-2.5 pl-10 pr-10 text-[13px] text-gray-700 placeholder:text-gray-400 bg-gray-50 border border-gray-200 focus:outline-none focus:border-gray-300 focus:bg-white transition-all duration-200"
+                    style={{ borderColor: searchQuery ? `${primaryColor}50` : undefined }}
+                  />
+                  <Search size={16} strokeWidth={2} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" />
+                  <button
+                    onClick={() => {
+                      setIsMobileSearchOpen(false);
+                      setShowSearchPreview(false);
+                    }}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 w-6 h-6 flex items-center justify-center rounded-full text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors"
+                  >
+                    <X size={14} strokeWidth={2.5} />
+                  </button>
+
+                  {showSearchPreview && (
+                    <SearchPreview
+                      searchQuery={searchQuery}
+                      onClose={() => setShowSearchPreview(false)}
+                      onSelectProduct={() => {
+                        setShowSearchPreview(false);
+                        setIsMobileSearchOpen(false);
+                      }}
+                    />
+                  )}
+                </div>
+              </div>
+            </motion.div>
+          </>
+        )}
+      </AnimatePresence>
+
+      {/* Mobile drawer menu */}
+      <AnimatePresence>
+        {isMobileMenuOpen && (
+          <div className="fixed inset-0 z-50 lg:hidden">
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.25 }}
+              className="absolute inset-0 bg-black/30"
               onClick={() => setIsMobileMenuOpen(false)}
             />
 
-            {/* Drawer */}
             <motion.div
               initial={{ x: '-100%' }}
               animate={{ x: 0 }}
               exit={{ x: '-100%' }}
-              transition={{ type: 'spring', damping: 25, stiffness: 200 }}
-              className="absolute top-0 left-0 w-[85%] max-w-sm h-full bg-white shadow-2xl flex flex-col"
+              transition={{ type: 'spring', damping: 28, stiffness: 260 }}
+              className="absolute top-0 left-0 w-[82%] max-w-[320px] h-full bg-white shadow-2xl flex flex-col"
             >
-              {/* Header */}
-              <div className="flex justify-between items-center px-6 py-6 border-b border-gray-100">
+              {/* Drawer header */}
+              <div className="flex items-center justify-between px-5 h-16 border-b border-gray-100 flex-shrink-0">
                 <motion.div
-                  initial={{ opacity: 0, x: -20 }}
+                  initial={{ opacity: 0, x: -12 }}
                   animate={{ opacity: 1, x: 0 }}
-                  transition={{ delay: 0.2 }}
+                  transition={{ delay: 0.15 }}
                 >
                   {logoUrl && !logoUrl.includes('default') ? (
-                    <img src={logoUrl} alt={brandName} className="h-10" />
+                    <img src={logoUrl} alt={brandName} className="h-8" />
                   ) : (
-                    <div
-                      className="font-sans text-3xl font-bold tracking-tighter"
+                    <span
+                      className="font-sans text-xl font-bold tracking-tight"
                       style={{ color: primaryColor }}
                     >
                       {displayName}
-                    </div>
+                    </span>
                   )}
                 </motion.div>
 
-                <motion.button
-                  whileHover={{ scale: 1.1, rotate: 90 }}
-                  whileTap={{ scale: 0.9 }}
+                <button
                   onClick={() => setIsMobileMenuOpen(false)}
-                  className="w-10 h-10 flex items-center justify-center rounded-lg hover:bg-gray-100 transition-colors"
+                  className="w-9 h-9 flex items-center justify-center rounded-full hover:bg-gray-100 text-gray-500 transition-colors"
                   aria-label="Fechar menu"
                 >
-                  <X size={22} strokeWidth={2} />
-                </motion.button>
+                  <X size={18} strokeWidth={2} />
+                </button>
               </div>
 
               {/* Navigation */}
-              <nav className="flex-1 overflow-y-auto px-6 py-6">
+              <nav className="flex-1 overflow-y-auto">
                 <motion.div
                   initial="hidden"
                   animate="visible"
@@ -982,84 +983,72 @@ const Header = () => {
                     hidden: { opacity: 0 },
                     visible: {
                       opacity: 1,
-                      transition: {
-                        staggerChildren: 0.05,
-                        delayChildren: 0.1
-                      }
+                      transition: { staggerChildren: 0.04, delayChildren: 0.1 }
                     }
                   }}
-                  className="space-y-1"
+                  className="py-3 px-3"
                 >
-                  <motion.div
-                    variants={{
-                      hidden: { opacity: 0, x: -20 },
-                      visible: { opacity: 1, x: 0 }
-                    }}
-                  >
+                  <motion.div variants={{ hidden: { opacity: 0, x: -16 }, visible: { opacity: 1, x: 0 } }}>
                     <BrandLink
                       to="/shop"
                       onClick={() => setIsMobileMenuOpen(false)}
-                      className="block py-3 px-4 text-base font-semibold text-gray-700 hover:text-gray-900 rounded-lg hover:bg-gray-50 transition-all uppercase tracking-wide"
+                      className="flex items-center gap-3 px-3 py-3 text-[13px] font-semibold text-gray-700 hover:text-gray-900 rounded-lg hover:bg-gray-50 transition-colors uppercase tracking-wide"
                     >
+                      <Package size={16} className="text-gray-400" />
                       Todos os Produtos
                     </BrandLink>
                   </motion.div>
 
-                  <div className="h-px bg-gray-100 my-2" />
+                  <div className="h-px bg-gray-100 mx-3 my-1.5" />
 
-                  {menuCategories?.map((category, index) => (
+                  {menuCategories?.map((category) => (
                     <motion.div
                       key={category.id}
-                      variants={{
-                        hidden: { opacity: 0, x: -20 },
-                        visible: { opacity: 1, x: 0 }
-                      }}
+                      variants={{ hidden: { opacity: 0, x: -16 }, visible: { opacity: 1, x: 0 } }}
                     >
                       <div className="flex items-center">
                         <BrandLink
                           to={`/shop?category=${category.slug}`}
                           onClick={() => setIsMobileMenuOpen(false)}
-                          className="flex-1 py-3 px-4 text-base font-semibold text-gray-700 hover:text-gray-900 rounded-lg hover:bg-gray-50 transition-all uppercase tracking-wide"
+                          className="flex-1 px-3 py-3 text-[13px] font-semibold text-gray-700 hover:text-gray-900 rounded-lg hover:bg-gray-50 transition-colors uppercase tracking-wide"
                         >
                           {category.name}
                         </BrandLink>
 
                         {category.children && category.children.length > 0 && (
-                          <motion.button
-                            whileTap={{ scale: 0.95 }}
+                          <button
                             onClick={() => setExpandedCategory(expandedCategory === category.id ? null : category.id)}
-                            className="w-10 h-10 flex items-center justify-center rounded-lg hover:bg-gray-100 transition-colors"
+                            className="w-9 h-9 flex items-center justify-center rounded-full hover:bg-gray-100 transition-colors"
                             aria-label={`Expandir ${category.name}`}
                           >
                             <ChevronRight
-                              size={18}
+                              size={14}
                               strokeWidth={2.5}
-                              className={`transition-transform duration-300 ${
+                              className={`text-gray-400 transition-transform duration-200 ${
                                 expandedCategory === category.id ? 'rotate-90' : ''
                               }`}
                               style={{ color: expandedCategory === category.id ? primaryColor : undefined }}
                             />
-                          </motion.button>
+                          </button>
                         )}
                       </div>
 
-                      {/* Subcategorias */}
                       <AnimatePresence>
                         {category.children && category.children.length > 0 && expandedCategory === category.id && (
                           <motion.div
                             initial={{ height: 0, opacity: 0 }}
                             animate={{ height: 'auto', opacity: 1 }}
                             exit={{ height: 0, opacity: 0 }}
-                            transition={{ duration: 0.3 }}
-                            className="overflow-hidden ml-4 pl-4 border-l-2 space-y-1"
-                            style={{ borderColor: `${primaryColor}30` }}
+                            transition={{ duration: 0.25 }}
+                            className="overflow-hidden ml-5 pl-3 border-l-2"
+                            style={{ borderColor: `${primaryColor}25` }}
                           >
                             {category.children.map((sub) => (
                               <BrandLink
                                 key={sub.id}
                                 to={`/shop?category=${sub.slug}`}
                                 onClick={() => setIsMobileMenuOpen(false)}
-                                className="block py-2.5 px-4 text-sm font-medium text-gray-600 hover:text-gray-900 rounded-lg hover:bg-gray-50 transition-all"
+                                className="block px-3 py-2.5 text-[12px] font-medium text-gray-500 hover:text-gray-800 rounded-md hover:bg-gray-50 transition-colors"
                               >
                                 {sub.name}
                               </BrandLink>
@@ -1072,19 +1061,15 @@ const Header = () => {
 
                   {hasLoyalty && (
                     <>
-                      <div className="h-px bg-gray-100 my-2" />
-                      <motion.div
-                        variants={{
-                          hidden: { opacity: 0, x: -20 },
-                          visible: { opacity: 1, x: 0 }
-                        }}
-                      >
+                      <div className="h-px bg-gray-100 mx-3 my-1.5" />
+                      <motion.div variants={{ hidden: { opacity: 0, x: -16 }, visible: { opacity: 1, x: 0 } }}>
                         <BrandLink
                           to="/club"
                           onClick={() => setIsMobileMenuOpen(false)}
-                          className="block py-3 px-4 text-base font-semibold rounded-lg transition-all uppercase tracking-wide"
-                          style={{ color: primaryColor, backgroundColor: `${primaryColor}10` }}
+                          className="flex items-center gap-3 mx-1 px-3 py-3 text-[13px] font-semibold rounded-lg transition-colors uppercase tracking-wide"
+                          style={{ color: primaryColor, backgroundColor: `${primaryColor}08` }}
                         >
+                          <Star size={16} />
                           {displayName} Club
                         </BrandLink>
                       </motion.div>
@@ -1092,14 +1077,30 @@ const Header = () => {
                   )}
                 </motion.div>
               </nav>
+
+              {/* Drawer footer */}
+              {user && (
+                <div className="px-4 py-3 border-t border-gray-100 flex-shrink-0">
+                  <button
+                    onClick={async () => {
+                      await signOut();
+                      useToastStore.getState().queueToast('Você saiu da sua conta. Até logo!', 'info');
+                      window.location.hash = '#/';
+                      window.location.reload();
+                    }}
+                    className="w-full flex items-center justify-center gap-2 py-2.5 text-[12px] font-semibold text-red-500 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                  >
+                    <LogOut size={14} />
+                    Sair da conta
+                  </button>
+                </div>
+              )}
             </motion.div>
           </div>
         )}
       </AnimatePresence>
 
       <CartDrawer />
-
-      {/* Login Modal */}
       <LoginModal isOpen={isLoginModalOpen} onClose={() => setIsLoginModalOpen(false)} />
     </>
   );
@@ -1958,17 +1959,17 @@ const AboutPage = () => {
 const HomePage = () => {
   const { brand, brandConfig, isLoading: brandLoading } = useBrand();
   const { primaryColor } = useBrandColors();
+  const { user } = useAuth();
   const { data: heroBanner, isLoading: bannerLoading } = useHeroBanner();
   const { data: featuredProducts } = useFeaturedProducts();
-  const { data: featuredCategories } = useFeaturedCategories();
   const navigate = useNavigate();
   const { data: tabacariaCategories, isLoading: tabacariaLoading } = useTabacariaCategories();
 
   // Aplicar tema dinâmico
   useApplyBrandTheme();
 
-  // Loading geral - aguarda dados críticos
-  const isLoading = brandLoading || bannerLoading;
+  // Loading geral - só mostra loading se a marca ainda não carregou de nenhuma forma
+  const isLoading = brandLoading && !brand && !brandConfig;
 
   // Dados dinâmicos da marca
   const brandName = brand?.name || brandConfig.name || 'Sesh Store';
@@ -2030,70 +2031,13 @@ const HomePage = () => {
         textColor="#FFFFFF"
       />
 
-      {/* 3. Categorias em Destaque */}
-      {featuredCategories && featuredCategories.length > 0 && (
-        <section className="py-12 md:py-16 bg-white">
-          <div className="container mx-auto px-6 md:px-8 lg:px-12">
-            <h2 className="font-sans text-3xl md:text-4xl text-center mb-10 tracking-tight">CATEGORIAS</h2>
-            <div className={`grid gap-4 md:gap-6 ${
-              featuredCategories.length === 1 ? 'grid-cols-1 max-w-lg mx-auto'
-              : featuredCategories.length === 2 ? 'grid-cols-2 max-w-2xl mx-auto'
-              : featuredCategories.length === 3 ? 'grid-cols-3'
-              : featuredCategories.length === 4 ? 'grid-cols-2 md:grid-cols-4'
-              : 'grid-cols-2 md:grid-cols-3'
-            }`}>
-              {featuredCategories.map((category: any) => (
-                <BrandLink key={category.id} to={`/shop?category=${category.slug}`}>
-                  <div className="relative overflow-hidden rounded-xl group cursor-pointer aspect-[4/3]">
-                    {category.banner_url ? (
-                      <img
-                        src={category.banner_url}
-                        alt={category.name}
-                        className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110"
-                      />
-                    ) : (
-                      <div
-                        className="w-full h-full flex items-center justify-center"
-                        style={{ backgroundColor: `${primaryColor}15` }}
-                      >
-                        <span className="text-5xl">{category.icon || '🏷️'}</span>
-                      </div>
-                    )}
-                    {/* Overlay */}
-                    <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/10 to-transparent transition-opacity duration-300 group-hover:from-black/80" />
-                    {/* Label */}
-                    <div className="absolute bottom-0 left-0 right-0 p-4 md:p-5">
-                      <span className="text-white font-bold text-sm md:text-base uppercase tracking-wider block">
-                        {category.name}
-                      </span>
-                      {category.description && (
-                        <span className="text-white/70 text-xs mt-1 block line-clamp-1 hidden md:block">
-                          {category.description}
-                        </span>
-                      )}
-                    </div>
-                    {/* Hover CTA */}
-                    <div
-                      className="absolute top-3 right-3 w-8 h-8 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all duration-300 transform translate-x-2 group-hover:translate-x-0"
-                      style={{ backgroundColor: primaryColor }}
-                    >
-                      <ChevronRight size={14} className="text-white" />
-                    </div>
-                  </div>
-                </BrandLink>
-              ))}
-            </div>
-          </div>
-        </section>
-      )}
-
-      {/* 4. Seção DESTAQUES - Todos os produtos em destaque */}
+      {/* 3. Seção DESTAQUES - Todos os produtos em destaque */}
       {featuredProducts && featuredProducts.length > 0 && (
         <section id="destaques" className="py-16 md:py-20">
           <div className="container mx-auto px-6 md:px-8 lg:px-12">
             <h2 className="font-sans text-3xl md:text-4xl text-center mb-8">DESTAQUES</h2>
             <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 md:gap-6 lg:gap-8">
-              {featuredProducts.map((product: any) => {
+              {featuredProducts.filter((product: any) => !product.is_tabaco || user).map((product: any) => {
                 const images = product.product_images
                   ? product.product_images
                       .sort((a: any, b: any) => (a.position || 0) - (b.position || 0))
@@ -2194,6 +2138,7 @@ const ProductListPage = () => {
   const location = useLocation();
   const { primaryColor } = useBrandColors();
   const { brand } = useBrand();
+  const { user } = useAuth();
   const { searchQuery, clearSearch } = useSearch();
 
   // Extrair parâmetros da URL
@@ -2253,6 +2198,9 @@ const ProductListPage = () => {
 
   // Aplicar filtros
   const filteredProducts = baseProducts.filter((p: any) => {
+    // Filtro de tabaco: só mostra se o usuário estiver logado
+    if (p.is_tabaco && !user) return false;
+
     // Filtro por cor
     if (filterState.color.length > 0) {
       const productColors = (p.product_variants || []).map((v: any) => v.color).filter(Boolean);
@@ -2805,6 +2753,9 @@ const ProductDetailPage = () => {
   const { addToCart, setIsCartOpen } = useCart();
   const { primaryColor } = useBrandColors();
   const { brand } = useBrand();
+  const { user } = useAuth();
+  const isFavorite = useIsFavorite(id || '');
+  const { mutate: toggleFavorite } = useToggleFavorite();
 
   // Buscar produto do banco de dados
   const { data: product, isLoading, error } = useProduct(id || '');
@@ -3007,6 +2958,17 @@ const ProductDetailPage = () => {
         <h1 className="font-sans text-4xl mb-4">PRODUTO NÃO ENCONTRADO</h1>
         <p className="text-gray-500 mb-8">O produto que você procura não existe ou foi removido.</p>
         <Button onClick={() => navigate('/shop')}>VOLTAR PARA A LOJA</Button>
+      </div>
+    );
+  }
+
+  // Produto de tabaco: só mostra se o usuário estiver logado
+  if (product.is_tabaco && !user) {
+    return (
+      <div className="container mx-auto px-4 py-20 text-center animate-fade-in">
+        <h1 className="font-sans text-4xl mb-4">ACESSO RESTRITO</h1>
+        <p className="text-gray-500 mb-8">Este produto é restrito. Faça login para visualizar.</p>
+        <Button onClick={() => window.dispatchEvent(new CustomEvent('open-login-modal'))}>FAZER LOGIN</Button>
       </div>
     );
   }
@@ -3308,9 +3270,17 @@ const ProductDetailPage = () => {
             <motion.button
               whileHover={{ scale: 1.05 }}
               whileTap={{ scale: 0.95 }}
-              className="w-12 h-12 md:w-14 md:h-14 flex-shrink-0 border border-gray-200 flex items-center justify-center rounded-lg hover:border-gray-800 hover:bg-gray-50 transition-all duration-200"
+              className={`w-12 h-12 md:w-14 md:h-14 flex-shrink-0 border flex items-center justify-center rounded-lg transition-all duration-200 ${isFavorite ? 'border-red-300 bg-red-50 hover:bg-red-100' : 'border-gray-200 hover:border-gray-800 hover:bg-gray-50'}`}
+              onClick={() => {
+                if (!user) {
+                  window.dispatchEvent(new CustomEvent('open-login-modal'));
+                  return;
+                }
+                toggleFavorite(id || '');
+              }}
+              aria-label={isFavorite ? "Remover dos favoritos" : "Adicionar aos favoritos"}
             >
-              <Heart size={18} className="text-gray-600" />
+              <Heart size={18} className={`transition-colors duration-200 ${isFavorite ? 'fill-red-500 text-red-500' : 'text-gray-600'}`} />
             </motion.button>
           </motion.div>
 
@@ -3417,7 +3387,7 @@ const ProductDetailPage = () => {
             </BrandLink>
           </div>
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-4 md:gap-6">
-            {relatedProducts.filter((p: any) => p.id !== product.id).slice(0, 4).map((p: any, index: number) => (
+            {relatedProducts.filter((p: any) => p.id !== product.id && (!p.is_tabaco || user)).slice(0, 4).map((p: any, index: number) => (
               <motion.div
                 key={p.id}
                 initial={{ opacity: 0, y: 16 }}
@@ -3516,6 +3486,7 @@ const App = () => {
           <AuthProvider>
             <SearchProvider>
               <CartContext.Provider value={{ cart, addToCart, removeFromCart, updateQuantity, clearCart, cartCount, isCartOpen, setIsCartOpen }}>
+                <ToastNotification />
                 <ScrollToTop />
                 <SEOHead />
                 <AgeVerificationPopup />
@@ -3536,6 +3507,10 @@ const App = () => {
                         <Route path="/about" element={<AboutPage />} />
                         <Route path="/club" element={<AboutPage />} />
                         <Route path="/faq" element={<FAQPage />} />
+                        <Route path="/profile" element={<ProtectedRoute><ProfilePage /></ProtectedRoute>} />
+                        <Route path="/orders" element={<ProtectedRoute><OrdersPage /></ProtectedRoute>} />
+                        <Route path="/favorites" element={<ProtectedRoute><FavoritesPage /></ProtectedRoute>} />
+                        <Route path="/settings" element={<ProtectedRoute><SettingsPage /></ProtectedRoute>} />
                         <Route path="/page/:slug" element={<StaticPageRenderer />} />
                         <Route path="*" element={<HomePage />} />
                       </Routes>
@@ -3551,6 +3526,10 @@ const App = () => {
                   <Route path="/about" element={<AboutPage />} />
                   <Route path="/club" element={<AboutPage />} />
                   <Route path="/faq" element={<FAQPage />} />
+                  <Route path="/profile" element={<ProtectedRoute><ProfilePage /></ProtectedRoute>} />
+                  <Route path="/orders" element={<ProtectedRoute><OrdersPage /></ProtectedRoute>} />
+                  <Route path="/favorites" element={<ProtectedRoute><FavoritesPage /></ProtectedRoute>} />
+                  <Route path="/settings" element={<ProtectedRoute><SettingsPage /></ProtectedRoute>} />
                   <Route path="/page/:slug" element={<StaticPageRenderer />} />
                     <Route path="*" element={<HomePage />} />
                   </Routes>
@@ -3562,6 +3541,7 @@ const App = () => {
           </AuthProvider>
         </BrandProvider>
       </HashRouter>
+      <ReactQueryDevtools initialIsOpen={false} />
     </QueryClientProvider>
   );
 };

@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useEffect, useState, useCallback } from 'react';
+import React, { createContext, useContext, useEffect, useState, useCallback, useRef } from 'react';
 import { supabase } from '../lib/supabase';
 import { getCurrentBrand } from '../lib/brand-detection';
 import { getBrandConfig, BrandConfig } from '../config/brands';
@@ -25,39 +25,93 @@ interface BrandContextType {
 
 const BrandContext = createContext<BrandContextType | undefined>(undefined);
 
+const QUERY_TIMEOUT = 15000; // 15 segundos de timeout
+const BRAND_CACHE_KEY = 'brand_cache_';
+
+// Funções de cache em sessionStorage
+const getCachedBrand = (slug: string): Brand | null => {
+  try {
+    const cached = sessionStorage.getItem(BRAND_CACHE_KEY + slug);
+    return cached ? JSON.parse(cached) : null;
+  } catch { return null; }
+};
+
+const setCachedBrand = (slug: string, brand: Brand) => {
+  try {
+    sessionStorage.setItem(BRAND_CACHE_KEY + slug, JSON.stringify(brand));
+  } catch { /* ignore */ }
+};
+
 export const BrandProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [brand, setBrand] = useState<Brand | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
+  const initialSlug = getCurrentBrand();
+  const cachedBrand = getCachedBrand(initialSlug);
+
+  const [brand, setBrand] = useState<Brand | null>(cachedBrand);
+  const [isLoading, setIsLoading] = useState(!cachedBrand);
   const [error, setError] = useState<Error | null>(null);
-  const [currentSlug, setCurrentSlug] = useState(getCurrentBrand());
+  const [currentSlug, setCurrentSlug] = useState(initialSlug);
+  const loadIdRef = useRef(0);
+
+  const fetchBrandFromDB = async (slug: string): Promise<Brand> => {
+    const queryPromise = supabase
+      .from('brands')
+      .select('*')
+      .eq('slug', slug)
+      .eq('active', true)
+      .single();
+
+    const timeoutPromise = new Promise<never>((_, reject) =>
+      setTimeout(() => reject(new Error(`Timeout: query demorou mais de ${QUERY_TIMEOUT}ms`)), QUERY_TIMEOUT)
+    );
+
+    const { data, error: supabaseError } = await Promise.race([queryPromise, timeoutPromise]);
+    if (supabaseError) throw supabaseError;
+    return data as Brand;
+  };
 
   const loadBrand = useCallback(async (slug: string) => {
+    const loadId = ++loadIdRef.current;
+
     try {
-      setIsLoading(true);
-
-      // Busca a marca do Supabase
-      const { data, error: supabaseError } = await supabase
-        .from('brands')
-        .select('*')
-        .eq('slug', slug)
-        .eq('active', true)
-        .single();
-
-      if (supabaseError) {
-        throw supabaseError;
+      // Se já tem cache, usa imediatamente e atualiza em background
+      const cached = getCachedBrand(slug);
+      if (cached) {
+        setBrand(cached);
+        setCurrentSlug(slug);
+        setIsLoading(false);
+      } else {
+        setIsLoading(true);
       }
+
+      // Buscar do banco (atualiza cache)
+      const data = await fetchBrandFromDB(slug);
+
+      if (loadId !== loadIdRef.current) return;
 
       setBrand(data);
       setCurrentSlug(slug);
       setError(null);
+      setCachedBrand(slug, data);
     } catch (err) {
-      console.error('Erro ao carregar marca:', err);
+      if (loadId !== loadIdRef.current) return;
+
+      // Se já tem cache, mantém o que tem e não mostra erro
+      const cached = getCachedBrand(slug);
+      if (cached) {
+        console.warn(`[BrandContext] Query falhou para "${slug}", usando cache.`);
+        setBrand(cached);
+        setCurrentSlug(slug);
+        setError(null);
+        return;
+      }
+
+      console.error(`[BrandContext] Erro ao carregar marca "${slug}":`, err);
       setError(err as Error);
 
-      // Em caso de erro, usa configuração local como fallback
+      // Fallback: usa configuração local
       const config = getBrandConfig(slug);
       setBrand({
-        id: 'fallback',
+        id: '',
         slug: config.slug,
         name: config.name,
         domain: config.domain,
@@ -68,7 +122,9 @@ export const BrandProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       });
       setCurrentSlug(slug);
     } finally {
-      setIsLoading(false);
+      if (loadId === loadIdRef.current) {
+        setIsLoading(false);
+      }
     }
   }, []);
 
