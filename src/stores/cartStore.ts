@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { persist } from 'zustand/middleware';
+import { persist, createJSONStorage } from 'zustand/middleware';
 import type { FrenetShippingService } from '../types/shipping.types';
 
 export interface CartItem {
@@ -38,6 +38,42 @@ interface CartState {
   isMinOrderValueMet: (minValue: number) => boolean;
   getFreeShippingProgress: (threshold: number) => { remaining: number; percentage: number; isEligible: boolean };
 }
+
+// Storage com TTL de 6 horas - carrinho expira automaticamente
+const CART_TTL_MS = 6 * 60 * 60 * 1000; // 6 horas
+
+const cartStorage = {
+  getItem: (name: string) => {
+    try {
+      const raw = localStorage.getItem(name);
+      if (!raw) return null;
+
+      const data = JSON.parse(raw);
+
+      // Verifica se expirou
+      if (data._timestamp && Date.now() - data._timestamp > CART_TTL_MS) {
+        localStorage.removeItem(name);
+        return null;
+      }
+
+      return raw;
+    } catch {
+      return null;
+    }
+  },
+  setItem: (name: string, value: string) => {
+    try {
+      const data = JSON.parse(value);
+      data._timestamp = Date.now();
+      localStorage.setItem(name, JSON.stringify(data));
+    } catch {
+      localStorage.setItem(name, value);
+    }
+  },
+  removeItem: (name: string) => {
+    localStorage.removeItem(name);
+  },
+};
 
 export const useCartStore = create<CartState>()(
   persist(
@@ -247,21 +283,25 @@ export const useCartStore = create<CartState>()(
       },
     }),
     {
-      name: 'sesh-cart-storage',
+      name: 'store-cart-storage',
+      storage: createJSONStorage(() => cartStorage),
+      partialize: (state) => ({
+        cart: state.cart,
+        shipping: state.shipping,
+        shippingCost: state.shippingCost,
+      }),
       onRehydrateStorage: () => (state) => {
-        // Recalcula valores após carregar do localStorage
         if (state && state.cart.length > 0) {
           const subtotal = state.cart.reduce((acc, i) => acc + i.price * i.quantity, 0);
-          const discount = state.coupon?.discount || 0;
-          const total = Math.max(0, subtotal - discount);
           const shippingCost = state.shipping ? parseFloat(state.shipping.ShippingPrice) : 0;
 
           useCartStore.setState({
             cartSubtotal: subtotal,
             cartCount: state.cart.reduce((acc, i) => acc + i.quantity, 0),
-            discountAmount: discount,
-            cartTotal: total,
-            finalTotal: total + shippingCost,
+            discountAmount: 0,
+            cartTotal: subtotal,
+            shippingCost,
+            finalTotal: subtotal + shippingCost,
           });
         }
       },

@@ -38,7 +38,6 @@ interface AuthContextType {
   signInWithMagicLink: (email: string) => Promise<{ error: AuthError | null }>;
   signOut: () => Promise<void>;
   refreshProfile: () => Promise<void>;
-  hasAccessToBrand: (brandSlug: string) => boolean;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -72,6 +71,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, []);
 
   // Função para buscar as marcas do cliente
+  // IMPORTANTE: userBrands é usado apenas para tracking/analytics (ex: saber em quais marcas o cliente se cadastrou).
+  // NÃO deve ser usado para controle de acesso — o customer é global e tem acesso a todas as marcas se autenticado.
   const fetchCustomerBrands = useCallback(async (userId: string) => {
     try {
       const { data, error } = await supabase
@@ -159,7 +160,21 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   useEffect(() => {
     const initializeAuth = async () => {
       try {
+        // getSession() retorna do localStorage sem validar o token com o servidor.
+        // Usamos getUser() para validar que o token ainda é válido.
         const { data: { session: currentSession } } = await supabase.auth.getSession();
+
+        if (currentSession) {
+          // Valida o token com o servidor — se expirado/inválido, limpa a sessão
+          const { data: { user: validatedUser }, error: userError } = await supabase.auth.getUser();
+          if (userError || !validatedUser) {
+            // Token inválido — forçar logout local
+            await supabase.auth.signOut({ scope: 'local' });
+            await updateUserState(null);
+            return;
+          }
+        }
+
         await updateUserState(currentSession);
       } catch (error) {
         console.error('Erro ao inicializar autenticação:', error);
@@ -343,17 +358,35 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   // Logout
   const signOut = async () => {
-    // Limpar estado local imediatamente para não depender do onAuthStateChange
+    // 1. Limpa estado React imediatamente (UX responsiva)
     setUser(null);
     setProfile(null);
     setUserBrands([]);
     setSession(null);
     // Limpar cache do React Query (pedidos, favoritos, perfil, etc.)
     queryClient.clear();
+
+    // 2. Tenta signOut no Supabase
     try {
       await supabase.auth.signOut();
     } catch (error) {
       console.error('Erro ao fazer logout:', error);
+    } finally {
+      // 3. FORÇA limpeza do localStorage independente do resultado
+      // Garante que mesmo com falha de rede, o token não persiste
+      try {
+        const projectRef = import.meta.env.VITE_SUPABASE_URL
+          ?.replace('https://', '')
+          ?.split('.')[0];
+        if (projectRef) {
+          localStorage.removeItem(`sb-${projectRef}-auth-token`);
+        }
+
+        // 4. Limpa o carrinho para evitar leak de dados entre sessões
+        localStorage.removeItem('store-cart-storage');
+      } catch {
+        // ignore storage errors
+      }
     }
   };
 
@@ -369,11 +402,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
-  // Verificar se usuário tem acesso à marca
-  const hasAccessToBrand = (brandSlug: string) => {
-    return userBrands.some(brand => brand.brand_slug === brandSlug);
-  };
-
   return (
     <AuthContext.Provider
       value={{
@@ -387,7 +415,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         signInWithMagicLink,
         signOut,
         refreshProfile,
-        hasAccessToBrand,
       }}
     >
       {children}

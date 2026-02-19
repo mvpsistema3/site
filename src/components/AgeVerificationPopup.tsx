@@ -28,7 +28,7 @@ export function AgeVerificationPopup() {
 
   const handleDeny = () => {
     // Redireciona para o Google se for menor de idade
-    window.location.href = 'https://www.google.com';
+    window.history.back();
   };
 
   if (!isOpen) return null;
@@ -85,11 +85,11 @@ export function AgeVerificationPopup() {
         <div className="bg-gray-50 py-4 px-8 text-center border-t">
           <p className="text-xs text-gray-500">
             Ao acessar este site, você concorda com nossos{' '}
-            <a href="/termos" className="underline hover:text-gray-700">
+            <a href="/page/termos-de-uso" className="underline hover:text-gray-700">
               Termos de Uso
             </a>{' '}
             e{' '}
-            <a href="/privacidade" className="underline hover:text-gray-700">
+            <a href="/page/politica-de-privacidade" className="underline hover:text-gray-700">
               Política de Privacidade
             </a>
             .

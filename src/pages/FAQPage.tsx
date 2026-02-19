@@ -217,7 +217,7 @@ export function FAQPage() {
         <div className="mt-12 text-center border-t border-gray-100 pt-10">
           <p className="text-sm text-gray-500 mb-4">Não encontrou o que procurava?</p>
           <BrandLink
-            to="/page/contato"
+            to="/page/fale-conosco"
             className="inline-flex items-center gap-2 px-6 py-3 border-2 border-black rounded font-bold text-sm uppercase tracking-wider hover:bg-black hover:text-white transition-colors"
           >
             Fale Conosco <ArrowRight size={16} />

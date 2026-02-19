@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { X } from 'lucide-react';
 import { useBrand } from '../contexts/BrandContext';
+import { useQuery } from '@tanstack/react-query';
+import { supabase } from '../lib/supabase';
 
 const PROMO_SEEN_KEY = 'promo_popup_seen_date';
 
@@ -14,41 +16,63 @@ interface Promo {
   ctaLink?: string;
 }
 
+function useActivePromo() {
+  const { brand } = useBrand();
+
+  return useQuery({
+    queryKey: ['active-promo', brand?.id],
+    queryFn: async () => {
+      if (!brand?.id) return null;
+
+      const { data, error } = await supabase
+        .from('promos')
+        .select('id, title, description, image, coupon_code, cta_text, cta_link')
+        .eq('brand_id', brand.id)
+        .eq('active', true)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (error || !data) return null;
+
+      return {
+        id: data.id,
+        title: data.title,
+        description: data.description,
+        image: data.image,
+        couponCode: data.coupon_code,
+        ctaText: data.cta_text,
+        ctaLink: data.cta_link,
+      } as Promo;
+    },
+    enabled: !!brand?.id,
+    staleTime: 1000 * 60 * 10,
+  });
+}
+
 /**
  * Popup promocional
- * Aparece uma vez por dia se houver promoção ativa
+ * Aparece uma vez por dia se houver promoção ativa no banco
  */
 export function PromoPopup() {
   const [isOpen, setIsOpen] = useState(false);
-  const [promo, setPromo] = useState<Promo | null>(null);
   const { brandConfig } = useBrand();
+  const { data: promo } = useActivePromo();
 
   useEffect(() => {
-    // Verificar se já viu hoje
+    if (!promo) return;
+
     const lastSeen = localStorage.getItem(PROMO_SEEN_KEY);
     const today = new Date().toDateString();
 
     if (lastSeen !== today) {
-      // Aqui você pode buscar do Supabase
-      // Por enquanto, vou usar uma promo mockada
-      const mockPromo: Promo = {
-        id: '1',
-        title: '🎉 Promoção Especial!',
-        description: 'Ganhe 15% de desconto em toda a loja',
-        couponCode: 'PROMO15',
-        ctaText: 'Aproveitar agora',
-        ctaLink: '/shop',
-      };
-
-      // Pequeno delay para não aparecer junto com o popup +18
       const timer = setTimeout(() => {
-        setPromo(mockPromo);
         setIsOpen(true);
       }, 2000);
 
       return () => clearTimeout(timer);
     }
-  }, []);
+  }, [promo]);
 
   const handleClose = () => {
     localStorage.setItem(PROMO_SEEN_KEY, new Date().toDateString());

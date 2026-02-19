@@ -132,7 +132,7 @@ function FavoriteProductCard({
         onClick={() => navigate(`/product/${product.id}`)}
       >
         <img
-          src={images[0] || 'https://via.placeholder.com/600x800?text=Sem+Imagem'}
+          src={images[0] || ''}
           alt={product.name}
           loading="lazy"
           className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"

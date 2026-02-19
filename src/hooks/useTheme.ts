@@ -16,13 +16,13 @@ export function useApplyBrandTheme() {
       const root = document.documentElement;
 
       // Aplica as cores do tema como CSS variables
-      root.style.setProperty('--color-brand-primary', theme.primaryColor || '#00B4BD');
+      root.style.setProperty('--color-brand-primary', theme.primaryColor || '#000000');
       root.style.setProperty('--color-brand-secondary', theme.secondaryColor || '#000000');
       root.style.setProperty('--color-brand-background', theme.backgroundColor || '#FFFFFF');
       root.style.setProperty('--color-brand-text', theme.textColor || '#333333');
 
-      // Também sobrescreve a cor sesh-cyan para a cor primária da marca
-      root.style.setProperty('--color-sesh-cyan', theme.primaryColor || '#00B4BD');
+      // Sobrescreve a cor sesh-cyan para a cor primária da marca
+      root.style.setProperty('--color-sesh-cyan', theme.primaryColor || '#000000');
 
       // Aplica a fonte se especificada
       if (theme.font) {
@@ -130,7 +130,7 @@ export function useBrandColors() {
   const theme = brand?.theme || brandConfig.theme;
 
   return {
-    primaryColor: theme?.primaryColor || '#00B4BD',
+    primaryColor: theme?.primaryColor || '#000000',
     secondaryColor: theme?.secondaryColor || '#000000',
     backgroundColor: theme?.backgroundColor || '#FFFFFF',
     textColor: theme?.textColor || '#333333',
