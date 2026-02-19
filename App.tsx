@@ -18,7 +18,7 @@ import { useFeaturedProducts, useProducts, useProduct, useProductsByCategorySlug
 import { useFuzzySearch } from './src/hooks/useFuzzySearch';
 import { useHeroCollection, useProductsByCollectionSlug } from './src/hooks/useCollections';
 import { useCategories, useCategoryTree, useMenuCategories, useTabacariaCategories, Category } from './src/hooks/useCategories';
-import { useFAQs } from './src/hooks/useFAQs';
+import { useFAQs, useFAQsByCategory } from './src/hooks/useFAQs';
 import { useGroupedFooterLinks } from './src/hooks/useFooterLinks';
 import { FAQPage } from './src/pages/FAQPage';
 import { StaticPageRenderer } from './src/pages/StaticPageRenderer';
@@ -55,9 +55,10 @@ import { StickyMobileCTA } from './src/components/StickyMobileCTA';
 import { ProductDetailSkeleton } from './src/components/ProductDetailSkeleton';
 import { ShopPageSkeleton } from './src/components/ShopPageSkeleton';
 import { MarqueeBanner } from './src/components/MarqueeBanner';
+import { useBanners } from './src/hooks/useBanners';
 import { ProductSectionWithTabs } from './src/components/ProductSectionWithTabs';
 import { ToastNotification } from './src/components/ToastNotification';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion, AnimatePresence, useScroll, useTransform, useInView } from 'framer-motion';
 
 // --- Contexts ---
 
@@ -92,6 +93,180 @@ const ScrollToTop = () => {
 
   return null;
 };
+
+// --- Scroll Animation Components ---
+
+interface ScrollRevealProps {
+  children: React.ReactNode;
+  className?: string;
+  direction?: 'up' | 'down' | 'left' | 'right' | 'none';
+  delay?: number;
+  duration?: number;
+  distance?: number;
+  once?: boolean;
+  threshold?: number;
+  scale?: number;
+}
+
+const ScrollReveal: React.FC<ScrollRevealProps> = ({
+  children,
+  className = '',
+  direction = 'up',
+  delay = 0,
+  duration = 0.6,
+  distance = 60,
+  once = true,
+  threshold = 0.15,
+  scale,
+}) => {
+  const ref = React.useRef<HTMLDivElement>(null);
+  const isInView = useInView(ref, { amount: threshold, margin: '0px 0px -100px 0px' });
+  const [revealed, setRevealed] = React.useState(false);
+
+  // Só revela se o usuário já scrollou (scrollY > 0)
+  // Isso impede seções abaixo do fold de animarem no carregamento
+  React.useEffect(() => {
+    if (revealed) return;
+
+    const check = () => {
+      if (isInView && window.scrollY > 0) {
+        setRevealed(true);
+      }
+    };
+
+    check();
+    window.addEventListener('scroll', check, { passive: true });
+    return () => window.removeEventListener('scroll', check);
+  }, [isInView, revealed]);
+
+  const directionMap: Record<string, { x?: number; y?: number }> = {
+    up: { y: distance },
+    down: { y: -distance },
+    left: { x: distance },
+    right: { x: -distance },
+    none: {},
+  };
+
+  const initialOffset = directionMap[direction] || {};
+
+  return (
+    <motion.div
+      ref={ref}
+      className={className}
+      initial={{
+        opacity: 0,
+        ...initialOffset,
+        ...(scale ? { scale } : {}),
+      }}
+      animate={revealed ? {
+        opacity: 1,
+        x: 0,
+        y: 0,
+        scale: 1,
+      } : {
+        opacity: 0,
+        ...initialOffset,
+        ...(scale ? { scale } : {}),
+      }}
+      transition={{
+        duration,
+        delay,
+        ease: [0.25, 0.1, 0.25, 1],
+      }}
+    >
+      {children}
+    </motion.div>
+  );
+};
+
+interface ParallaxImageProps {
+  src: string;
+  alt: string;
+  className?: string;
+  speed?: number;
+}
+
+const ParallaxImage: React.FC<ParallaxImageProps> = ({
+  src,
+  alt,
+  className = '',
+  speed = 0.3,
+}) => {
+  const ref = React.useRef<HTMLDivElement>(null);
+  const { scrollYProgress } = useScroll({
+    target: ref,
+    offset: ['start start', 'end start'],
+  });
+  const y = useTransform(scrollYProgress, [0, 1], ['0%', `${speed * 100}%`]);
+  const imgScale = useTransform(scrollYProgress, [0, 1], [1, 1.15]);
+
+  return (
+    <div ref={ref} className="absolute inset-0 overflow-hidden">
+      <motion.img
+        src={src}
+        alt={alt}
+        className={className}
+        style={{ y, scale: imgScale }}
+      />
+    </div>
+  );
+};
+
+interface StaggerContainerProps {
+  children: React.ReactNode;
+  className?: string;
+  staggerDelay?: number;
+  threshold?: number;
+}
+
+const StaggerContainer: React.FC<StaggerContainerProps> = ({
+  children,
+  className = '',
+  staggerDelay = 0.08,
+  threshold = 0.1,
+}) => {
+  const ref = React.useRef<HTMLDivElement>(null);
+  const isInView = useInView(ref, { once: true, amount: threshold });
+
+  return (
+    <motion.div
+      ref={ref}
+      className={className}
+      initial="hidden"
+      animate={isInView ? 'visible' : 'hidden'}
+      variants={{
+        hidden: { opacity: 0 },
+        visible: {
+          opacity: 1,
+          transition: {
+            staggerChildren: staggerDelay,
+          },
+        },
+      }}
+    >
+      {children}
+    </motion.div>
+  );
+};
+
+const StaggerItem: React.FC<{
+  children: React.ReactNode;
+  className?: string;
+}> = ({ children, className = '' }) => (
+  <motion.div
+    className={className}
+    variants={{
+      hidden: { opacity: 0, y: 30 },
+      visible: {
+        opacity: 1,
+        y: 0,
+        transition: { duration: 0.5, ease: [0.25, 0.1, 0.25, 1] },
+      },
+    }}
+  >
+    {children}
+  </motion.div>
+);
 
 // --- Components ---
 
@@ -288,7 +463,7 @@ const ProductCard: React.FC<ProductCardProps> = ({ product }) => {
 const FAQSection = () => {
   const [openIndex, setOpenIndex] = useState<number | null>(null);
   const { primaryColor } = useBrandColors();
-  const { data: faqs, isLoading } = useFAQs();
+  const { data: faqs, isLoading } = useFAQsByCategory('geral');
 
   const toggle = (index: number) => {
     setOpenIndex(openIndex === index ? null : index);
@@ -300,18 +475,19 @@ const FAQSection = () => {
   }
 
   return (
-    <section className="bg-white py-16 border-t border-gray-100">
+    <section className="bg-white py-20 md:py-28 border-t border-gray-100">
       <div className="container mx-auto px-4 max-w-3xl">
-        <div className="text-center mb-12">
-           <h2 className="font-sans text-4xl mb-4">
-             DÚVIDAS <span style={{ color: primaryColor }}>FREQUENTES</span>
-           </h2>
-           <p className="text-gray-500">Tudo o que você precisa saber.</p>
+        <div className="text-center mb-12 md:mb-16">
+          <div className="w-12 h-[2px] mx-auto mb-6" style={{ backgroundColor: primaryColor }} />
+          <h2 className="font-sans text-4xl md:text-5xl font-black uppercase tracking-tight mb-4">
+            DÚVIDAS <span style={{ color: primaryColor }}>FREQUENTES</span>
+          </h2>
+          <p className="text-gray-400 text-sm tracking-[0.3em] uppercase">Tudo o que você precisa saber</p>
         </div>
 
         <div className="space-y-2">
           {faqs.map((faq, index) => (
-            <div key={faq.id} className="border border-gray-200 rounded hover:border-black transition-colors bg-gray-50/50">
+            <div key={faq.id} className="border border-gray-200 hover:border-black transition-colors bg-gray-50/50">
               <button
                 className="w-full flex justify-between items-center p-5 text-left font-bold text-sm uppercase tracking-wide focus:outline-none"
                 onClick={() => toggle(index)}
@@ -322,13 +498,21 @@ const FAQSection = () => {
                 {openIndex === index ? <Minus size={18} /> : <Plus size={18} />}
               </button>
 
-              <div
-                className={`overflow-hidden transition-all duration-300 ease-in-out ${openIndex === index ? 'max-h-48 opacity-100' : 'max-h-0 opacity-0'}`}
-              >
-                <div className="p-5 pt-0 text-gray-600 text-sm leading-relaxed border-t border-dashed border-gray-200 mt-2">
-                  {faq.answer}
-                </div>
-              </div>
+              <AnimatePresence>
+                {openIndex === index && (
+                  <motion.div
+                    initial={{ height: 0, opacity: 0 }}
+                    animate={{ height: 'auto', opacity: 1 }}
+                    exit={{ height: 0, opacity: 0 }}
+                    transition={{ duration: 0.3, ease: [0.25, 0.1, 0.25, 1] }}
+                    className="overflow-hidden"
+                  >
+                    <div className="p-5 pt-0 text-gray-600 text-sm leading-relaxed border-t border-dashed border-gray-200 mt-2">
+                      {faq.answer}
+                    </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
             </div>
           ))}
         </div>
@@ -1964,9 +2148,26 @@ const HomePage = () => {
   const { data: featuredProducts } = useFeaturedProducts();
   const navigate = useNavigate();
   const { data: tabacariaCategories, isLoading: tabacariaLoading } = useTabacariaCategories();
+  const { data: banners } = useBanners();
 
   // Aplicar tema dinâmico
   useApplyBrandTheme();
+
+  // Preload banner images para não travar ao revelar com scroll
+  React.useEffect(() => {
+    if (banners && banners.length > 0) {
+      banners.forEach((banner) => {
+        if (banner.image_url) {
+          const img = new Image();
+          img.src = banner.image_url;
+        }
+        if (banner.mobile_image_url) {
+          const img = new Image();
+          img.src = banner.mobile_image_url;
+        }
+      });
+    }
+  }, [banners]);
 
   // Loading geral - só mostra loading se a marca ainda não carregou de nenhuma forma
   const isLoading = brandLoading && !brand && !brandConfig;
@@ -1990,62 +2191,166 @@ const HomePage = () => {
   }
 
   return (
-    <main className="animate-fade-in">
-      {/* 1. Hero Banner - Coleção Ativa */}
+    <main>
+      {/* 1. Hero Banner - Streetwear Editorial with Parallax */}
       {heroCollection && (
-        <section className="relative h-[500px] md:h-[600px] lg:h-[700px] w-full overflow-hidden bg-gray-900">
-          {/* Imagem desktop */}
-          <img
+        <section className="relative h-[600px] md:h-[700px] lg:h-[90vh] w-full overflow-hidden bg-black">
+          {/* Parallax Background - Desktop */}
+          <ParallaxImage
             src={heroCollection.image_url || ''}
             alt={heroCollection.name || "Hero"}
-            className="absolute inset-0 w-full h-full object-cover opacity-60 hidden md:block"
+            className="absolute inset-0 w-full h-full object-cover opacity-50 hidden md:block"
+            speed={0.3}
           />
-          {/* Imagem mobile (fallback para desktop se não houver) */}
-          <img
+          {/* Parallax Background - Mobile */}
+          <ParallaxImage
             src={heroCollection.mobile_image_url || heroCollection.image_url || ''}
             alt={heroCollection.name || "Hero"}
-            className="absolute inset-0 w-full h-full object-cover opacity-60 md:hidden"
+            className="absolute inset-0 w-full h-full object-cover opacity-50 md:hidden"
+            speed={0.15}
           />
-          <div className="absolute inset-0 flex flex-col justify-center items-center text-center p-6">
-            <h1 className="font-sans text-6xl md:text-8xl text-white mb-6 drop-shadow-xl rotate-[-2deg]">
-              {heroCollection.name}
-            </h1>
-            {heroCollection.description && (
-              <p className="text-white text-lg md:text-xl font-bold tracking-widest uppercase mb-8 max-w-2xl drop-shadow-md">
-                {heroCollection.description}
-              </p>
-            )}
-            {heroCollection.show_button && (
-              <BrandLink to={heroCollection.redirect_url || `/shop?collection=${heroCollection.slug}`}>
-                <button
-                  className="font-bold uppercase tracking-wide px-12 py-4 text-lg text-white rounded transition-all duration-300 hover:bg-black"
-                  style={{ backgroundColor: primaryColor }}
+
+          {/* Grain overlay for texture */}
+          <div className="absolute inset-0 bg-noise opacity-[0.03] pointer-events-none z-[1]" />
+
+          {/* Gradient overlay - bottom fade for depth */}
+          <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent z-[2]" />
+
+          {/* Content - Editorial layout, bottom-left aligned */}
+          <div className="absolute inset-0 flex flex-col justify-end items-start p-8 md:p-16 lg:p-24 z-[3]">
+            <motion.div
+              initial="hidden"
+              animate="visible"
+              variants={{
+                hidden: { opacity: 0 },
+                visible: {
+                  opacity: 1,
+                  transition: { staggerChildren: 0.15, delayChildren: 0.3 },
+                },
+              }}
+              className="max-w-3xl"
+            >
+              {/* Accent line */}
+              <motion.div
+                variants={{
+                  hidden: { scaleX: 0, originX: 0 },
+                  visible: { scaleX: 1, transition: { duration: 0.8, ease: [0.25, 0.1, 0.25, 1] } },
+                }}
+                className="w-16 h-1 mb-6 origin-left"
+                style={{ backgroundColor: primaryColor }}
+              />
+
+              {/* Collection name - massive editorial type */}
+              <motion.h1
+                variants={{
+                  hidden: { opacity: 0, y: 40, clipPath: 'inset(0 0 100% 0)' },
+                  visible: {
+                    opacity: 1,
+                    y: 0,
+                    clipPath: 'inset(0 0 0% 0)',
+                    transition: { duration: 0.8, ease: [0.25, 0.1, 0.25, 1] },
+                  },
+                }}
+                className="font-sans text-5xl md:text-7xl lg:text-8xl xl:text-9xl text-white font-black uppercase leading-[0.9] tracking-tight mb-4"
+              >
+                {heroCollection.name}
+              </motion.h1>
+
+              {/* Description */}
+              {heroCollection.description && (
+                <motion.p
+                  variants={{
+                    hidden: { opacity: 0, y: 20 },
+                    visible: {
+                      opacity: 1,
+                      y: 0,
+                      transition: { duration: 0.6, ease: 'easeOut' },
+                    },
+                  }}
+                  className="text-white/80 text-base md:text-lg font-medium tracking-widest uppercase mb-8 max-w-xl"
                 >
-                  {heroCollection.button_text || "VER COLEÇÃO"}
-                </button>
-              </BrandLink>
-            )}
+                  {heroCollection.description}
+                </motion.p>
+              )}
+
+              {/* CTA Button */}
+              {heroCollection.show_button && (
+                <motion.div
+                  variants={{
+                    hidden: { opacity: 0, y: 20 },
+                    visible: {
+                      opacity: 1,
+                      y: 0,
+                      transition: { duration: 0.6, ease: 'easeOut' },
+                    },
+                  }}
+                >
+                  <BrandLink to={heroCollection.redirect_url || `/shop?collection=${heroCollection.slug}`}>
+                    <button
+                      className="group font-bold uppercase tracking-widest px-10 py-4 text-sm text-white border-2 border-white bg-transparent transition-all duration-300 hover:bg-white hover:text-black"
+                    >
+                      {heroCollection.button_text || "VER COLEÇÃO"}
+                      <ArrowRight className="inline-block ml-3 w-4 h-4 transition-transform duration-300 group-hover:translate-x-1" />
+                    </button>
+                  </BrandLink>
+                </motion.div>
+              )}
+            </motion.div>
+
+            {/* Scroll indicator */}
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              transition={{ delay: 1.5, duration: 0.8 }}
+              className="absolute bottom-8 right-8 md:right-16 hidden md:flex flex-col items-center gap-2"
+            >
+              <span className="text-white/40 text-[10px] tracking-[0.3em] uppercase rotate-90 origin-center">Scroll</span>
+              <motion.div
+                animate={{ y: [0, 8, 0] }}
+                transition={{ duration: 1.5, repeat: Infinity, ease: 'easeInOut' }}
+                className="w-[1px] h-8 bg-white/30"
+              />
+            </motion.div>
           </div>
         </section>
       )}
 
       {/* 2. Faixa Promocional Marquee */}
-      <MarqueeBanner
-        items={[
-          { text: "DROPS EXCLUSIVOS & COLLABS ICÔNICAS", icon: "sparkles" },
-          { text: "FRETE GRÁTIS ACIMA DE R$200", icon: "truck" },
-          { text: "PARCELE EM ATÉ 6X SEM JUROS", icon: "credit-card" },
-        ]}
-        bgColor="#B91C1C"
-        textColor="#FFFFFF"
-      />
+      <ScrollReveal direction="none" duration={0.5}>
+        <MarqueeBanner
+          items={[
+            { text: "DROPS EXCLUSIVOS & COLLABS ICÔNICAS", icon: "sparkles" },
+            { text: "FRETE GRÁTIS ACIMA DE R$200", icon: "truck" },
+            { text: "PARCELE EM ATÉ 6X SEM JUROS", icon: "credit-card" },
+          ]}
+          bgColor="#B91C1C"
+          textColor="#FFFFFF"
+        />
+      </ScrollReveal>
 
-      {/* 3. Seção DESTAQUES - Todos os produtos em destaque */}
+      {/* 3. Seção DESTAQUES - Editorial Product Grid */}
       {featuredProducts && featuredProducts.length > 0 && (
-        <section id="destaques" className="py-16 md:py-20">
-          <div className="container mx-auto px-6 md:px-8 lg:px-12">
-            <h2 className="font-sans text-3xl md:text-4xl text-center mb-8">DESTAQUES</h2>
-            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 md:gap-6 lg:gap-8">
+        <section id="destaques" className="py-20 md:py-28 bg-white relative overflow-hidden">
+          {/* Subtle background decoration */}
+          <div className="absolute top-0 right-0 text-[200px] md:text-[300px] font-black text-gray-50 leading-none select-none pointer-events-none -translate-y-1/4 translate-x-1/4">
+            DROP
+          </div>
+
+          <div className="container mx-auto px-6 md:px-8 lg:px-12 relative z-10">
+            <ScrollReveal direction="up" distance={40} duration={0.7}>
+              <div className="flex flex-col items-center mb-12 md:mb-16">
+                <div className="w-12 h-[2px] mb-6" style={{ backgroundColor: primaryColor }} />
+                <h2 className="font-sans text-4xl md:text-5xl lg:text-6xl font-black text-center uppercase tracking-tight">
+                  DESTAQUES
+                </h2>
+                <p className="text-gray-400 text-sm tracking-[0.3em] uppercase mt-3">Seleção curada</p>
+              </div>
+            </ScrollReveal>
+
+            <StaggerContainer
+              className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 md:gap-6 lg:gap-8"
+              staggerDelay={0.1}
+            >
               {featuredProducts.filter((product: any) => !product.is_tabaco || user).map((product: any) => {
                 const images = product.product_images
                   ? product.product_images
@@ -2072,73 +2377,173 @@ const HomePage = () => {
                   reviews: product.reviews || 0,
                 };
                 return (
-                  <ProductCard
-                    key={product.id}
-                    product={normalized}
-                    onView={(p) => navigate(`/product/${p.id}`)}
-                  />
+                  <StaggerItem key={product.id}>
+                    <ProductCard
+                      product={normalized}
+                      onView={(p) => navigate(`/product/${p.id}`)}
+                    />
+                  </StaggerItem>
                 );
               })}
-            </div>
+            </StaggerContainer>
           </div>
         </section>
       )}
 
-      {/* 5. Banner Desconto Progressivo */}
-      <section className="bg-gradient-to-r from-black to-gray-900 text-white py-12 md:py-16">
-        <div className="container mx-auto px-4 text-center">
-          <h2 className="font-sans text-3xl md:text-4xl mb-2" style={{ color: primaryColor }}>DESCONTO PROGRESSIVO!</h2>
-          <p className="text-xl md:text-2xl font-bold uppercase tracking-wider mb-6">LEVE MAIS, PAGUE MENOS</p>
-          <div className="flex flex-col md:flex-row justify-center gap-4 md:gap-16 text-sm font-bold tracking-widest">
-            <div className="border border-gray-700 p-4 rounded">2 PEÇAS = 10% OFF</div>
-            <div
-              className="p-4 rounded"
-              style={{ borderColor: primaryColor, borderWidth: '1px', backgroundColor: `${primaryColor}20` }}
-            >
-              3 PEÇAS = 20% OFF
-            </div>
-            <div className="border border-gray-700 p-4 rounded">4 PEÇAS = 30% OFF</div>
-          </div>
-        </div>
-      </section>
+      {/* 5. Banners Dinâmicos do Banco - Scroll Reveal com imagens pré-carregadas */}
+      {banners && banners.length > 0 && banners.map((banner) => (
+        <ScrollReveal key={banner.id} direction="up" distance={60} duration={0.7} threshold={0.1}>
+          <section className="relative w-full overflow-hidden">
+            {banner.cta_link ? (
+              <BrandLink to={banner.cta_link} className="block">
+                <div className="relative w-full h-[300px] md:h-[400px] lg:h-[500px]">
+                  {/* Desktop image */}
+                  <img
+                    src={banner.image_url}
+                    alt={banner.title}
+                    className="absolute inset-0 w-full h-full object-cover hidden md:block"
+                    loading="eager"
+                  />
+                  {/* Mobile image (fallback to desktop) */}
+                  <img
+                    src={banner.mobile_image_url || banner.image_url}
+                    alt={banner.title}
+                    className="absolute inset-0 w-full h-full object-cover md:hidden"
+                    loading="eager"
+                  />
 
-      {/* 6. Seção TABACARIA - Produtos com tabs de categoria (apenas logados) */}
-      {user && tabacariaCategories && tabacariaCategories.length > 0 && (
-        <ProductSectionWithTabs
-          title="TABACARIA"
-          categories={tabacariaCategories}
-          showAllOption={false}
-          maxProducts={4}
-          sectionId="tabacaria"
-          bgColor="#FAFAFA"
-        />
+                  {/* Gradient overlay */}
+                  <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/20 to-transparent" />
+
+                  {/* Content overlay */}
+                  <div className="absolute inset-0 flex flex-col justify-end items-start p-8 md:p-16 lg:p-24">
+                    {banner.subtitle && (
+                      <span className="text-white/60 text-xs md:text-sm tracking-[0.3em] uppercase font-medium mb-2">
+                        {banner.subtitle}
+                      </span>
+                    )}
+                    <h2 className="font-sans text-3xl md:text-5xl lg:text-6xl font-black text-white uppercase tracking-tight leading-[0.95] mb-3">
+                      {banner.title}
+                    </h2>
+                    {banner.description && (
+                      <p className="text-white/70 text-sm md:text-base max-w-xl mb-4">
+                        {banner.description}
+                      </p>
+                    )}
+                    {banner.cta_text && (
+                      <span className="group inline-flex items-center font-bold uppercase tracking-widest text-xs md:text-sm text-white border-b-2 border-white/40 pb-1 transition-all duration-300 hover:border-white">
+                        {banner.cta_text}
+                        <ArrowRight className="ml-2 w-4 h-4 transition-transform duration-300 group-hover:translate-x-1" />
+                      </span>
+                    )}
+                  </div>
+                </div>
+              </BrandLink>
+            ) : (
+              <div className="relative w-full h-[300px] md:h-[400px] lg:h-[500px]">
+                {/* Desktop image */}
+                <img
+                  src={banner.image_url}
+                  alt={banner.title}
+                  className="absolute inset-0 w-full h-full object-cover hidden md:block"
+                  loading="eager"
+                />
+                {/* Mobile image (fallback to desktop) */}
+                <img
+                  src={banner.mobile_image_url || banner.image_url}
+                  alt={banner.title}
+                  className="absolute inset-0 w-full h-full object-cover md:hidden"
+                  loading="eager"
+                />
+
+                {/* Gradient overlay */}
+                <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/20 to-transparent" />
+
+                {/* Content overlay */}
+                <div className="absolute inset-0 flex flex-col justify-end items-start p-8 md:p-16 lg:p-24">
+                  {banner.subtitle && (
+                    <span className="text-white/60 text-xs md:text-sm tracking-[0.3em] uppercase font-medium mb-2">
+                      {banner.subtitle}
+                    </span>
+                  )}
+                  <h2 className="font-sans text-3xl md:text-5xl lg:text-6xl font-black text-white uppercase tracking-tight leading-[0.95] mb-3">
+                    {banner.title}
+                  </h2>
+                  {banner.description && (
+                    <p className="text-white/70 text-sm md:text-base max-w-xl">
+                      {banner.description}
+                    </p>
+                  )}
+                </div>
+              </div>
+            )}
+          </section>
+        </ScrollReveal>
+      ))}
+
+      {/* 6. Seção TABACARIA - Produtos com tabs de categoria */}
+      {tabacariaCategories && tabacariaCategories.length > 0 && (
+        <ScrollReveal direction="up" distance={50}>
+          <ProductSectionWithTabs
+            title="TABACARIA"
+            categories={tabacariaCategories}
+            showAllOption={false}
+            maxProducts={4}
+            sectionId="tabacaria"
+            bgColor="#FAFAFA"
+          />
+        </ScrollReveal>
       )}
 
-      {/* 7. Quem Somos - Resumo */}
-      <section className="bg-white py-16 md:py-20">
-        <div className="container mx-auto px-6 md:px-8">
-          <div className="max-w-4xl mx-auto text-center">
-            <h2 className="font-sans text-4xl md:text-5xl mb-6">
-              {displayName} <span style={{ color: primaryColor }}>VIBES</span>
-            </h2>
-            <p className="text-gray-600 leading-relaxed text-lg mb-8">
-              Nascida nas ruas, criada para o mundo. A {displayName} não é apenas uma marca de roupas, é um movimento.
-              Representamos a autenticidade do skate, a liberdade do graffiti e a força da comunidade urbana.
-            </p>
-            <BrandLink to="/about">
-              <button
-                className="font-bold uppercase tracking-wide px-8 py-3 text-white rounded transition-all duration-300 hover:opacity-80"
-                style={{ backgroundColor: primaryColor }}
-              >
-                CONHEÇA NOSSA HISTÓRIA
-              </button>
-            </BrandLink>
+      {/* 7. Quem Somos - Editorial Streetwear (scroll-triggered) */}
+      <ScrollReveal direction="up" distance={50} duration={0.7} threshold={0.2}>
+        <section className="relative bg-white py-24 md:py-32 overflow-hidden">
+          {/* Giant background text */}
+          <div className="absolute inset-0 flex items-center justify-center pointer-events-none select-none">
+            <span className="text-[120px] md:text-[200px] lg:text-[280px] font-black text-gray-50 uppercase leading-none">
+              VIBES
+            </span>
           </div>
-        </div>
-      </section>
+
+          <div className="container mx-auto px-6 md:px-8 relative z-10">
+            <div className="max-w-4xl mx-auto">
+              <ScrollReveal direction="up" distance={40}>
+                <div className="text-center mb-8">
+                  <div className="w-12 h-[2px] mx-auto mb-6" style={{ backgroundColor: primaryColor }} />
+                  <h2 className="font-sans text-5xl md:text-6xl lg:text-7xl font-black uppercase tracking-tight">
+                    {displayName} <span style={{ color: primaryColor }}>VIBES</span>
+                  </h2>
+                </div>
+              </ScrollReveal>
+
+              <ScrollReveal direction="up" delay={0.2} distance={30}>
+                <p className="text-gray-500 leading-relaxed text-lg md:text-xl text-center max-w-2xl mx-auto mb-12">
+                  Nascida nas ruas, criada para o mundo. A {displayName} não é apenas uma marca de roupas, é um movimento.
+                  Representamos a autenticidade do skate, a liberdade do graffiti e a força da comunidade urbana.
+                </p>
+              </ScrollReveal>
+
+              <ScrollReveal direction="up" delay={0.3}>
+                <div className="text-center">
+                  <BrandLink to="/about">
+                    <button
+                      className="group font-bold uppercase tracking-widest px-10 py-4 text-sm border-2 border-black bg-transparent text-black transition-all duration-300 hover:bg-black hover:text-white"
+                    >
+                      CONHEÇA NOSSA HISTÓRIA
+                      <ArrowRight className="inline-block ml-3 w-4 h-4 transition-transform duration-300 group-hover:translate-x-1" />
+                    </button>
+                  </BrandLink>
+                </div>
+              </ScrollReveal>
+            </div>
+          </div>
+        </section>
+      </ScrollReveal>
 
       {/* 8. FAQ Section */}
-      <FAQSection />
+      <ScrollReveal direction="up" distance={40}>
+        <FAQSection />
+      </ScrollReveal>
     </main>
   );
 };

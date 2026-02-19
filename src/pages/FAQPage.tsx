@@ -92,28 +92,23 @@ export function FAQPage() {
       />
 
       {/* Hero */}
-      <div className="bg-black text-white py-16 md:py-24 relative overflow-hidden">
-        <div className="absolute inset-0 opacity-10">
-          <div className="absolute inset-0" style={{
-            background: `radial-gradient(circle at 50% 50%, ${primaryColor}40, transparent 70%)`
-          }} />
-        </div>
-        <div className="container mx-auto px-4 relative z-10 text-center">
+      <div className="container mx-auto px-4 pt-10 pb-6 max-w-3xl">
+        <div className="flex items-center gap-3 mb-1">
           <div
-            className="inline-flex items-center justify-center w-16 h-16 rounded-full mb-6"
-            style={{ backgroundColor: `${primaryColor}20`, border: `2px solid ${primaryColor}40` }}
+            className="flex items-center justify-center w-9 h-9 rounded-lg"
+            style={{ backgroundColor: `${primaryColor}15` }}
           >
-            <HelpCircle size={28} style={{ color: primaryColor }} />
+            <HelpCircle size={18} style={{ color: primaryColor }} />
           </div>
-          <h1 className="font-sans text-4xl md:text-5xl font-bold mb-3">
-            PERGUNTAS <span style={{ color: primaryColor }}>FREQUENTES</span>
+          <h1 className="font-sans text-2xl md:text-3xl font-bold tracking-tight">
+            Perguntas Frequentes
           </h1>
-          <p className="text-gray-400 text-lg">Tudo o que você precisa saber.</p>
         </div>
+        <p className="text-gray-400 text-sm ml-12">Tudo o que você precisa saber.</p>
       </div>
 
       {/* Content */}
-      <div className="container mx-auto px-4 py-12 md:py-16 max-w-3xl">
+      <div className="container mx-auto px-4 pb-12 md:pb-16 max-w-3xl">
 
         {/* Search */}
         <div className="relative mb-8">

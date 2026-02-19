@@ -263,7 +263,6 @@ export function useTabacariaCategories() {
         .select('*, category_products!inner(product_id)')
         .is('deleted_at', null)
         .eq('active', true)
-        .eq('is_tabacaria', true)
         .eq('featured', true)
         .eq('brand_id', brand.id)
         .order('position', { ascending: true })
