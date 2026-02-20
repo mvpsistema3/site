@@ -3,10 +3,10 @@
  * Execute com: node apply-migrations.js
  */
 
-require('dotenv').config({ path: '.env.local' });
+const path = require('path');
+require('dotenv').config({ path: path.join(__dirname, '..', '.env.local') });
 const { createClient } = require('@supabase/supabase-js');
 const fs = require('fs');
-const path = require('path');
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
@@ -27,7 +27,7 @@ async function applyMigrations() {
   ];
 
   for (const migrationFile of migrations) {
-    const migrationPath = path.join(__dirname, 'supabase', 'migrations', migrationFile);
+    const migrationPath = path.join(__dirname, '..', 'supabase', 'migrations', migrationFile);
 
     try {
       console.log(`📄 Aplicando migration: ${migrationFile}`);

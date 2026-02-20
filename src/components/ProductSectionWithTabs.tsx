@@ -7,7 +7,7 @@ import { useBrandColors } from '../hooks/useTheme';
 import { useAuth } from '../contexts/AuthContext';
 import { BrandLink } from './BrandLink';
 import { ProductCard } from './ProductCard';
-import { Product } from '../../types';
+import { Product } from '../types';
 
 /**
  * Normaliza produto do banco para formato esperado pelo ProductCard

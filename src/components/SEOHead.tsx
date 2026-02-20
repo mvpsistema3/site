@@ -1,6 +1,6 @@
 import React, { useEffect } from 'react';
 import { useBrand } from '../contexts/BrandContext';
-import { Product } from '../../types';
+import { Product } from '../types';
 
 interface SEOHeadProps {
   title?: string;

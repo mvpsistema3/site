@@ -4,7 +4,7 @@ import { VariantSelector } from '../components/VariantSelector';
 import { FeatureFlag } from '../components/FeatureFlag';
 import { ProductCard } from '../components/ProductCard';
 import { useBrand } from '../contexts/BrandContext';
-import { Product } from '../../types';
+import { Product } from '../types';
 
 // Exemplo de página de produto integrando os três componentes criados
 const ProductPage: React.FC = () => {

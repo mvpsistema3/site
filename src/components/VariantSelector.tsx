@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Product } from '../../types';
+import { Product } from '../types';
 import { useBrandConfig } from '../contexts/BrandContext';
 import { Check, X } from 'lucide-react';
 

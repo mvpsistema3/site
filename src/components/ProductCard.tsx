@@ -1,5 +1,5 @@
 import React from 'react';
-import { Product } from '../../types';
+import { Product } from '../types';
 import { useBrand } from '../contexts/BrandContext';
 import { useAuth } from '../contexts/AuthContext';
 import { FeatureFlag } from './FeatureFlag';
