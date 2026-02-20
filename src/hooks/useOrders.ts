@@ -29,7 +29,7 @@ export interface OrderWithItems {
   discount: number;
   discount_amount: number;
   total: number;
-  status: 'pending' | 'paid' | 'processing' | 'shipped' | 'delivered' | 'cancelled';
+  status: 'pending' | 'processing' | 'shipped' | 'delivered' | 'cancelled' | 'refunded';
   payment_status: string;
   fulfillment_status: string | null;
   payment_method: string | null;
@@ -53,6 +53,7 @@ export const ORDER_STATUS_CONFIG: Record<string, { label: string; color: string;
   shipped: { label: 'Enviado', color: 'text-purple-700', bgColor: 'bg-purple-100' },
   delivered: { label: 'Entregue', color: 'text-emerald-700', bgColor: 'bg-emerald-100' },
   cancelled: { label: 'Cancelado', color: 'text-red-700', bgColor: 'bg-red-100' },
+  refunded: { label: 'Reembolsado', color: 'text-red-700', bgColor: 'bg-red-100' },
 };
 
 /**
