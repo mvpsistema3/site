@@ -121,7 +121,7 @@ export function PaymentModal({
         transition={{ duration: 0.3, ease: [0.16, 1, 0.3, 1] }}
       >
         <div
-          className="bg-white rounded-2xl max-w-md w-full max-h-[90vh] overflow-y-auto shadow-2xl relative"
+          className="bg-white rounded-2xl max-w-md w-full max-h-[90vh] overflow-y-auto scrollbar-hide shadow-2xl relative"
           onClick={(e) => e.stopPropagation()}
         >
           {/* Close button — only when closeable */}

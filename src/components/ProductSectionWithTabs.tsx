@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useBrandNavigate } from './BrandLink';
 import { ChevronRight, ChevronLeft } from 'lucide-react';
 import { Category } from '../hooks/useCategories';
 import { useProductsByCategorySlug } from '../hooks/useProducts';
@@ -99,7 +99,7 @@ export function ProductSectionWithTabs({
 }: ProductSectionWithTabsProps) {
   const { primaryColor } = useBrandColors();
   const { user } = useAuth();
-  const navigate = useNavigate();
+  const navigate = useBrandNavigate();
   const [selectedCategorySlug, setSelectedCategorySlug] = useState<string | null>(
     defaultCategorySlug || (categories.length > 0 ? categories[0]?.slug : null)
   );

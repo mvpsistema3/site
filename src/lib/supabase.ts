@@ -10,6 +10,9 @@ if (!supabaseUrl || !supabaseAnonKey) {
 
 export const supabase = createClient(supabaseUrl, supabaseAnonKey);
 
+// Credenciais expostas para queries públicas via fetch direto (sem JWT)
+export { supabaseUrl, supabaseAnonKey };
+
 // Database Types (You'll update these based on your Supabase schema)
 export type Product = {
   id: string;

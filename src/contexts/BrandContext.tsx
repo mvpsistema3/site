@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useEffect, useState, useCallback, useRef } from 'react';
-import { supabase } from '../lib/supabase';
+import { supabaseUrl, supabaseAnonKey } from '../lib/supabase';
 import { getCurrentBrand } from '../lib/brand-detection';
 import { getBrandConfig, BrandConfig } from '../config/brands';
 
@@ -25,10 +25,10 @@ interface BrandContextType {
 
 const BrandContext = createContext<BrandContextType | undefined>(undefined);
 
-const QUERY_TIMEOUT = 15000; // 15 segundos de timeout
 const BRAND_CACHE_KEY = 'brand_cache_';
+const QUERY_TIMEOUT = 8000;
 
-// Funções de cache em sessionStorage
+// Cache em sessionStorage
 const getCachedBrand = (slug: string): Brand | null => {
   try {
     const cached = sessionStorage.getItem(BRAND_CACHE_KEY + slug);
@@ -46,69 +46,43 @@ export const BrandProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   const initialSlug = getCurrentBrand();
   const cachedBrand = getCachedBrand(initialSlug);
 
+  // Fonte primária: cache ou config local. NUNCA espera o DB para renderizar.
   const [brand, setBrand] = useState<Brand | null>(cachedBrand);
-  const [isLoading, setIsLoading] = useState(!cachedBrand);
+  const [isLoading, setIsLoading] = useState(false); // Nunca bloqueia — sempre tem brandConfig
   const [error, setError] = useState<Error | null>(null);
   const [currentSlug, setCurrentSlug] = useState(initialSlug);
   const loadIdRef = useRef(0);
 
-  const fetchBrandFromDB = async (slug: string): Promise<Brand> => {
-    const queryPromise = supabase
-      .from('brands')
-      .select('*')
-      .eq('slug', slug)
-      .eq('active', true)
-      .single();
+  // Busca do DB via fetch direto com anon key — SEM passar pelo supabase client.
+  // Motivo: o supabase client injeta o JWT do usuário logado em toda request.
+  // Se o JWT estiver expirado (ex: hard refresh), o Supabase retorna 401
+  // ANTES de checar RLS, mesmo que a tabela brands permita acesso público.
+  const fetchBrandFromDB = useCallback(async (slug: string): Promise<Brand> => {
+    const url = `${supabaseUrl}/rest/v1/brands?slug=eq.${encodeURIComponent(slug)}&active=eq.true&select=*`;
+    const response = await fetch(url, {
+      headers: {
+        'apikey': supabaseAnonKey,
+        'Accept': 'application/vnd.pgrst.object+json', // equivale a .single()
+      },
+      signal: AbortSignal.timeout(QUERY_TIMEOUT),
+    });
 
-    const timeoutPromise = new Promise<never>((_, reject) =>
-      setTimeout(() => reject(new Error(`Timeout: query demorou mais de ${QUERY_TIMEOUT}ms`)), QUERY_TIMEOUT)
-    );
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}`);
+    }
 
-    const { data, error: supabaseError } = await Promise.race([queryPromise, timeoutPromise]);
-    if (supabaseError) throw supabaseError;
-    return data as Brand;
-  };
+    return await response.json() as Brand;
+  }, []);
 
   const loadBrand = useCallback(async (slug: string) => {
     const loadId = ++loadIdRef.current;
 
-    try {
-      // Se já tem cache, usa imediatamente e atualiza em background
-      const cached = getCachedBrand(slug);
-      if (cached) {
-        setBrand(cached);
-        setCurrentSlug(slug);
-        setIsLoading(false);
-      } else {
-        setIsLoading(true);
-      }
-
-      // Buscar do banco (atualiza cache)
-      const data = await fetchBrandFromDB(slug);
-
-      if (loadId !== loadIdRef.current) return;
-
-      setBrand(data);
-      setCurrentSlug(slug);
-      setError(null);
-      setCachedBrand(slug, data);
-    } catch (err) {
-      if (loadId !== loadIdRef.current) return;
-
-      // Se já tem cache, mantém o que tem e não mostra erro
-      const cached = getCachedBrand(slug);
-      if (cached) {
-        console.warn(`[BrandContext] Query falhou para "${slug}", usando cache.`);
-        setBrand(cached);
-        setCurrentSlug(slug);
-        setError(null);
-        return;
-      }
-
-      console.error(`[BrandContext] Erro ao carregar marca "${slug}":`, err);
-      setError(err as Error);
-
-      // Fallback: usa configuração local
+    // 1. Fonte imediata: cache ou config local — NUNCA bloqueia renderização
+    const cached = getCachedBrand(slug);
+    if (cached) {
+      setBrand(cached);
+    } else {
+      // Sem cache → usa config local como brand temporário (tem id vazio)
       const config = getBrandConfig(slug);
       setBrand({
         id: '',
@@ -120,13 +94,25 @@ export const BrandProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         settings: config.settings,
         active: true,
       });
-      setCurrentSlug(slug);
-    } finally {
-      if (loadId === loadIdRef.current) {
-        setIsLoading(false);
-      }
     }
-  }, []);
+    setCurrentSlug(slug);
+    setIsLoading(false);
+
+    // 2. Atualização em background do DB (não bloqueia UI)
+    try {
+      const data = await fetchBrandFromDB(slug);
+      if (loadId !== loadIdRef.current) return;
+
+      setBrand(data);
+      setCurrentSlug(slug);
+      setError(null);
+      setCachedBrand(slug, data);
+    } catch {
+      if (loadId !== loadIdRef.current) return;
+      // Query falhou — mantém o que já tem (cache ou config local)
+      console.warn(`[BrandContext] DB update falhou para "${slug}", usando dados locais.`);
+    }
+  }, [fetchBrandFromDB]);
 
   // Carrega a marca inicial
   useEffect(() => {
@@ -150,7 +136,7 @@ export const BrandProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     loadBrand(getCurrentBrand());
   }, [loadBrand]);
 
-  // Sempre tem um brandConfig disponível (mesmo durante loading)
+  // Sempre disponível — mesmo sem DB
   const brandConfig = getBrandConfig(brand?.slug || currentSlug);
 
   return (

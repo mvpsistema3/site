@@ -42,6 +42,7 @@ import { StockWarning } from '../components/StockWarning';
 import { FreeShippingBanner } from '../components/FreeShippingBanner';
 import { FreeShippingProgress } from '../components/FreeShippingProgress';
 import { AgeVerificationPopup } from '../components/AgeVerificationPopup';
+import { ErrorBoundary } from '../components/ErrorBoundary';
 import { PromoPopup } from '../components/PromoPopup';
 import { LoginModal } from '../components/LoginModal';
 import { UserMenu } from '../components/UserMenu';
@@ -557,7 +558,7 @@ const FAQSection = () => {
 
 const CartDrawer = () => {
   const { cart, removeFromCart, isCartOpen, setIsCartOpen, cartCount } = useCart();
-  const navigate = useNavigate();
+  const navigate = useBrandNavigate();
   const { primaryColor } = useBrandColors();
 
   if (!isCartOpen) return null;
@@ -1571,7 +1572,7 @@ const Footer = () => {
 
 const CartPage = () => {
   const { cart, updateQuantity, removeFromCart, clearCart } = useCart();
-  const navigate = useNavigate();
+  const navigate = useBrandNavigate();
   const { primaryColor } = useBrandColors();
 
   // Usar cartStore para ter acesso ao shipping e cupons
@@ -1881,7 +1882,7 @@ const HomePage = () => {
   const { user } = useAuth();
   const { data: heroCollection } = useHeroCollection();
   const { data: featuredProducts } = useFeaturedProducts();
-  const navigate = useNavigate();
+  const navigate = useBrandNavigate();
   const { data: tabacariaCategories, isLoading: tabacariaLoading } = useTabacariaCategories();
   const { data: banners } = useBanners();
 
@@ -3757,6 +3758,7 @@ const App = () => {
   const brandSlugs = Object.keys(BRAND_CONFIGS);
 
   return (
+    <ErrorBoundary>
     <QueryClientProvider client={queryClient}>
       <HashRouter>
         <BrandProvider>
@@ -3822,6 +3824,7 @@ const App = () => {
       </HashRouter>
       <ReactQueryDevtools initialIsOpen={false} />
     </QueryClientProvider>
+    </ErrorBoundary>
   );
 };
 

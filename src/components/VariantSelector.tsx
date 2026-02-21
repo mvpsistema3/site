@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Product } from '../types';
-import { useBrandConfig } from '../contexts/BrandContext';
+import { useBrand } from '../contexts/BrandContext';
 import { Check, X } from 'lucide-react';
 
 interface VariantStock {
@@ -61,7 +61,7 @@ export const VariantSelector: React.FC<VariantSelectorProps> = ({
   const dim1Type = variantDimensions?.[0]?.type || 'color';
   const dim2Label = variantDimensions?.[1]?.name || 'Tamanho';
   const dim2Type = variantDimensions?.[1]?.type || 'text';
-  const { brand } = useBrandConfig();
+  const { brand } = useBrand();
   const [availableSizes, setAvailableSizes] = useState<string[]>([]);
   const [availableColors, setAvailableColors] = useState<string[]>([]);
 
