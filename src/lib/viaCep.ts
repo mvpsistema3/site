@@ -54,12 +54,18 @@ export class ViaCEPService {
     }
 
     try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 8000);
+
       const response = await fetch(`${this.API_URL}/${cleanCEP}/json/`, {
         method: 'GET',
         headers: {
           'Content-Type': 'application/json',
         },
+        signal: controller.signal,
       });
+
+      clearTimeout(timeoutId);
 
       if (!response.ok) {
         throw new Error('Erro ao buscar CEP');
@@ -77,6 +83,9 @@ export class ViaCEPService {
 
       return data;
     } catch (error) {
+      if (error instanceof DOMException && error.name === 'AbortError') {
+        throw new Error('CEP: tempo de resposta esgotado. Tente novamente.');
+      }
       if (error instanceof Error) {
         throw error;
       }

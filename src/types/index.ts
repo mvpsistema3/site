@@ -21,8 +21,7 @@ export interface CartItem extends Product {
 }
 
 export interface FilterState {
-  color: string[];
-  size: string[];
+  dimensions: Record<string, string[]>;
   priceRange: [number, number] | null;
   sort: string;
 }

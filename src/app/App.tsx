@@ -29,8 +29,9 @@ import { FavoritesPage } from '../pages/FavoritesPage';
 import { ProtectedRoute } from '../components/ProtectedRoute';
 import { useApplyBrandTheme, useBrandColors } from '../hooks/useTheme';
 import { getBrandUrlPrefix } from '../lib/brand-detection';
-import { createAsaasPayment, BillingType } from '../lib/asaas';
 import { BRAND_CONFIGS } from '../config/brands';
+import { CheckoutPage } from '../pages/CheckoutPage';
+import { OrderConfirmationPage } from '../pages/OrderConfirmationPage';
 import { BrandLink, useBrandUrl, useBrandNavigate } from '../components/BrandLink';
 import { SEOHead } from '../components/SEOHead';
 import { ShippingCalculator } from '../components/ShippingCalculator';
@@ -84,6 +85,14 @@ const ScrollToTop = () => {
   const navType = useNavigationType();
   const prevPathRef = React.useRef(pathname);
   const scrollPositions = React.useRef<Record<string, number>>({});
+
+  // On refresh/initial load, scroll to top
+  useEffect(() => {
+    if ('scrollRestoration' in history) {
+      history.scrollRestoration = 'manual';
+    }
+    window.scrollTo(0, 0);
+  }, []);
 
   useEffect(() => {
     const prevPath = prevPathRef.current;
@@ -823,6 +832,18 @@ const Header = () => {
 
   const { data: menuCategories } = useMenuCategories();
 
+  // Filtrar categorias de tabacaria para usuários não logados
+  const visibleMenuCategories = useMemo(() => {
+    if (!menuCategories) return [];
+    if (user) return menuCategories;
+    return menuCategories
+      .filter((cat) => !cat.is_tabacaria)
+      .map((cat) => ({
+        ...cat,
+        children: cat.children?.filter((sub) => !sub.is_tabacaria),
+      }));
+  }, [menuCategories, user]);
+
   const brandName = brand?.name || brandConfig.name || 'Sesh Store';
   const displayName = brandName.split(' ')[0];
   const logoUrl = brand?.theme?.logo || brandConfig.theme.logo;
@@ -1004,7 +1025,7 @@ const Header = () => {
                   />
                 </BrandLink>
 
-                {menuCategories?.map((category) => (
+                {visibleMenuCategories?.map((category) => (
                   <div key={category.id} className="relative group">
                     <BrandLink
                       to={`/shop?category=${category.slug}`}
@@ -1203,7 +1224,7 @@ const Header = () => {
 
                   <div className="h-px bg-gray-100 mx-3 my-1.5" />
 
-                  {menuCategories?.map((category) => (
+                  {visibleMenuCategories?.map((category) => (
                     <motion.div
                       key={category.id}
                       variants={{ hidden: { opacity: 0, x: -16 }, visible: { opacity: 1, x: 0 } }}
@@ -1849,260 +1870,8 @@ const CartPage = () => {
   );
 };
 
-// --- New Pages: Checkout & Institutional ---
-
-const CheckoutPage = () => {
-  const navigate = useNavigate();
-  const [success, setSuccess] = useState(false);
-  const [isLoading, setIsLoading] = useState(false);
-  const [paymentError, setPaymentError] = useState<string | null>(null);
-  const [billingType, setBillingType] = useState<BillingType>('CREDIT_CARD');
-  const { brandConfig, currentSlug } = useBrand();
-
-  // Usar cartStore ao invés de useCart para ter acesso ao shipping
-  const {
-    cart,
-    clearCart,
-    cartSubtotal,
-    shipping,
-    shippingCost,
-    discountAmount,
-    setShipping
-  } = useCartStore();
-
-  const subtotal = cartSubtotal || cart.reduce((acc, item) => acc + (item.price * item.quantity), 0);
-  const total = Math.max(0, subtotal - discountAmount) + shippingCost;
-
-  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
-    setIsLoading(true);
-    setPaymentError(null);
-
-    const form = e.currentTarget;
-    const data = new FormData(form);
-
-    try {
-      const result = await createAsaasPayment({
-        customer: {
-          name: data.get('name') as string,
-          email: data.get('email') as string,
-          cpfCnpj: data.get('cpf') as string,
-          phone: data.get('phone') as string,
-        },
-        value: total,
-        billingType,
-        description: `Pedido ${brandConfig.name} - ${cart.length} item(s)`,
-        brandSlug: currentSlug,
-      });
-
-      if (result.invoiceUrl) {
-        window.open(result.invoiceUrl, '_blank');
-      }
-
-      setSuccess(true);
-      clearCart();
-    } catch (err) {
-      setPaymentError(err instanceof Error ? err.message : 'Erro ao processar pagamento. Tente novamente.');
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  if (cart.length === 0 && !success) {
-    return (
-      <div className="container mx-auto px-4 py-20 text-center animate-fade-in">
-        <h1 className="font-sans text-4xl mb-4">SEU CARRINHO ESTÁ VAZIO</h1>
-        <p className="text-gray-500 mb-8">Adicione produtos antes de finalizar a compra.</p>
-        <Button onClick={() => navigate('/shop')}>VOLTAR PARA A LOJA</Button>
-      </div>
-    );
-  }
-
-  if (success) {
-    return (
-      <div className="container mx-auto px-4 py-20 text-center animate-fade-in">
-        <div className="w-20 h-20 bg-green-100 text-green-600 rounded-full flex items-center justify-center mx-auto mb-6">
-          <CheckCircle size={40} />
-        </div>
-        <h1 className="font-sans text-4xl mb-4 text-sesh-cyan">PEDIDO CONFIRMADO!</h1>
-        <p className="text-xl font-bold mb-2">Obrigado pela sua compra.</p>
-        <p className="text-gray-500 mb-8">Você receberá um e-mail com os detalhes do rastreamento.</p>
-        <Button onClick={() => navigate('/')}>VOLTAR PARA HOME</Button>
-      </div>
-    );
-  }
-
-  return (
-    <div className="container mx-auto px-4 py-8 animate-fade-in">
-      <h1 className="font-sans text-3xl mb-8">FINALIZAR <span className="text-sesh-cyan">COMPRA</span></h1>
-      
-      <div className="grid lg:grid-cols-3 gap-8">
-        {/* Left Column - Forms */}
-        <div className="lg:col-span-2 space-y-8">
-          <form id="checkout-form" onSubmit={handleSubmit}>
-            {/* Identification */}
-            <section className="bg-white p-6 border rounded mb-6">
-              <h2 className="flex items-center gap-2 font-bold text-lg mb-4 border-b pb-2">
-                <User size={20} /> DADOS PESSOAIS
-              </h2>
-              <div className="grid md:grid-cols-2 gap-4">
-                <input required name="email" type="email" placeholder="E-mail" className="border p-3 rounded w-full focus:outline-none focus:ring-1 focus:ring-black" />
-                <input required name="name" type="text" placeholder="Nome Completo" className="border p-3 rounded w-full focus:outline-none focus:ring-1 focus:ring-black" />
-                <input required name="cpf" type="text" placeholder="CPF" className="border p-3 rounded w-full focus:outline-none focus:ring-1 focus:ring-black" />
-                <input name="phone" type="tel" placeholder="Telefone" className="border p-3 rounded w-full focus:outline-none focus:ring-1 focus:ring-black" />
-              </div>
-            </section>
-
-            {/* Address */}
-            <section className="bg-white p-6 border rounded mb-6">
-              <h2 className="flex items-center gap-2 font-bold text-lg mb-4 border-b pb-2">
-                <MapPin size={20} /> ENTREGA
-              </h2>
-              <div className="grid md:grid-cols-2 gap-4 mb-6">
-                <input required type="text" placeholder="CEP" className="border p-3 rounded w-full focus:outline-none focus:ring-1 focus:ring-black" />
-                <div className="md:col-span-2 grid grid-cols-[1fr_100px] gap-4">
-                   <input required type="text" placeholder="Rua" className="border p-3 rounded w-full focus:outline-none focus:ring-1 focus:ring-black" />
-                   <input required type="text" placeholder="Número" className="border p-3 rounded w-full focus:outline-none focus:ring-1 focus:ring-black" />
-                </div>
-                <input type="text" placeholder="Complemento" className="border p-3 rounded w-full focus:outline-none focus:ring-1 focus:ring-black" />
-                <input required type="text" placeholder="Bairro" className="border p-3 rounded w-full focus:outline-none focus:ring-1 focus:ring-black" />
-                <input required type="text" placeholder="Cidade" className="border p-3 rounded w-full focus:outline-none focus:ring-1 focus:ring-black" />
-                <input required type="text" placeholder="Estado" className="border p-3 rounded w-full focus:outline-none focus:ring-1 focus:ring-black" />
-              </div>
-
-              {/* Cálculo de Frete */}
-              <div className="border-t pt-6 mt-6">
-                <ShippingCalculator
-                  cartTotal={subtotal}
-                  onShippingSelected={(service) => {
-                    setShipping(service);
-                  }}
-                />
-              </div>
-            </section>
-
-            {/* Payment */}
-            <section className="bg-white p-6 border rounded">
-              <h2 className="flex items-center gap-2 font-bold text-lg mb-4 border-b pb-2">
-                <CreditCard size={20} /> PAGAMENTO
-              </h2>
-              
-              <div className="flex gap-4 mb-6">
-                <label className="flex-1 cursor-pointer" onClick={() => setBillingType('CREDIT_CARD')}>
-                  <input type="radio" name="billingType" className="peer sr-only" defaultChecked />
-                  <div className={`text-center p-4 border-2 rounded transition-all ${billingType === 'CREDIT_CARD' ? 'border-sesh-cyan bg-sesh-cyan/5' : ''}`}>
-                    <CreditCard className="mx-auto mb-2" />
-                    <span className="font-bold text-sm">CARTÃO</span>
-                  </div>
-                </label>
-                <label className="flex-1 cursor-pointer" onClick={() => setBillingType('PIX')}>
-                  <input type="radio" name="billingType" className="peer sr-only" />
-                  <div className={`text-center p-4 border-2 rounded transition-all ${billingType === 'PIX' ? 'border-sesh-cyan bg-sesh-cyan/5' : ''}`}>
-                    <span className="font-sans text-xl block mb-1">PIX</span>
-                    <span className="font-bold text-sm">10% OFF</span>
-                  </div>
-                </label>
-                <label className="flex-1 cursor-pointer" onClick={() => setBillingType('BOLETO')}>
-                  <input type="radio" name="billingType" className="peer sr-only" />
-                  <div className={`text-center p-4 border-2 rounded transition-all ${billingType === 'BOLETO' ? 'border-sesh-cyan bg-sesh-cyan/5' : ''}`}>
-                    <Package className="mx-auto mb-2" />
-                    <span className="font-bold text-sm">BOLETO</span>
-                  </div>
-                </label>
-              </div>
-
-              {billingType === 'CREDIT_CARD' && (
-                <div className="space-y-4">
-                  <input type="text" placeholder="Número do Cartão" className="border p-3 rounded w-full focus:outline-none focus:ring-1 focus:ring-black" />
-                  <input type="text" placeholder="Nome Impresso no Cartão" className="border p-3 rounded w-full focus:outline-none focus:ring-1 focus:ring-black" />
-                  <div className="grid grid-cols-2 gap-4">
-                    <input type="text" placeholder="Validade (MM/AA)" className="border p-3 rounded w-full focus:outline-none focus:ring-1 focus:ring-black" />
-                    <input type="text" placeholder="CVV" className="border p-3 rounded w-full focus:outline-none focus:ring-1 focus:ring-black" />
-                  </div>
-                </div>
-              )}
-
-              {billingType === 'PIX' && (
-                <div className="bg-green-50 border border-green-200 rounded p-4 text-sm text-green-800">
-                  Após confirmar, você será redirecionado para a página de pagamento com o QR Code PIX.
-                </div>
-              )}
-
-              {billingType === 'BOLETO' && (
-                <div className="bg-blue-50 border border-blue-200 rounded p-4 text-sm text-blue-800">
-                  Após confirmar, você será redirecionado para a página do boleto. Prazo de vencimento: 1 dia útil.
-                </div>
-              )}
-
-              {paymentError && (
-                <div className="mt-4 bg-red-50 border border-red-200 rounded p-4 text-sm text-red-700">
-                  {paymentError}
-                </div>
-              )}
-
-              <div className="flex items-center gap-2 text-xs text-gray-500 mt-4">
-                <Lock size={12} /> Pagamento processado com segurança via Asaas
-              </div>
-            </section>
-          </form>
-        </div>
-
-        {/* Right Column - Summary */}
-        <div className="lg:col-span-1">
-          <div className="bg-gray-50 p-6 rounded sticky top-24">
-            <h2 className="font-bold text-lg mb-6">RESUMO DO PEDIDO</h2>
-            <div className="space-y-4 mb-6 max-h-60 overflow-y-auto pr-2">
-              {cart.map((item, idx) => (
-                <div key={idx} className="flex gap-3 text-sm">
-                  <img src={item.images[0]} alt={item.name} className="w-12 h-12 object-cover bg-white" />
-                  <div>
-                    <p className="font-bold line-clamp-1">{item.name}</p>
-                    <p className="text-gray-500">{item.quantity}x R$ {item.price.toFixed(2)}</p>
-                    <p className="text-xs text-gray-400">{item.selectedSize} / {item.selectedColor}</p>
-                  </div>
-                </div>
-              ))}
-            </div>
-            
-            <div className="border-t pt-4 space-y-2 text-sm">
-              <div className="flex justify-between">
-                <span>Subtotal</span>
-                <span>R$ {subtotal.toFixed(2)}</span>
-              </div>
-              {shipping ? (
-                <div className="flex justify-between">
-                  <div className="flex flex-col">
-                    <span>Frete ({shipping.ServiceDescription})</span>
-                    <span className="text-xs text-gray-500">{shipping.DeliveryTime} dias úteis</span>
-                  </div>
-                  <span>R$ {shippingCost.toFixed(2)}</span>
-                </div>
-              ) : (
-                <div className="flex justify-between text-gray-500">
-                  <span>Frete</span>
-                  <span>Calcular</span>
-                </div>
-              )}
-              <div className="flex justify-between font-bold text-lg pt-2 border-t mt-2">
-                <span>TOTAL</span>
-                <span>R$ {total.toFixed(2)}</span>
-              </div>
-            </div>
-
-            <Button type="submit" form="checkout-form" fullWidth disabled={isLoading} className="mt-6 py-4 text-lg shadow-xl hover:shadow-2xl hover:-translate-y-1">
-              {isLoading ? 'PROCESSANDO...' : 'PAGAR AGORA'}
-            </Button>
-            <p className="text-center text-xs text-gray-400 mt-4">
-              Ao finalizar a compra você concorda com nossos termos de uso.
-            </p>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-};
-
-// AboutPage removido — usar StaticPageRenderer via /page/sobre-nos
+// CheckoutPage moved to src/pages/CheckoutPage.tsx
+// OrderConfirmationPage in src/pages/OrderConfirmationPage.tsx
 
 // --- Pages ---
 
@@ -2120,6 +1889,13 @@ const HomePage = () => {
   const visibleFeaturedProducts = useMemo(() => {
     return (featuredProducts || []).filter((product: any) => !product.is_tabaco || user);
   }, [featuredProducts, user]);
+
+  // Filtrar categorias de tabacaria (is_tabacaria) para usuários não logados
+  const visibleTabacariaCategories = useMemo(() => {
+    if (!tabacariaCategories) return [];
+    if (user) return tabacariaCategories;
+    return tabacariaCategories.filter((cat) => !cat.is_tabacaria);
+  }, [tabacariaCategories, user]);
 
   // Aplicar tema dinâmico
   useApplyBrandTheme();
@@ -2291,8 +2067,12 @@ const HomePage = () => {
         <MarqueeBanner
           items={[
             { text: "DROPS EXCLUSIVOS & COLLABS ICÔNICAS", icon: "sparkles" },
-            { text: "FRETE GRÁTIS ACIMA DE R$200", icon: "truck" },
-            { text: "PARCELE EM ATÉ 6X SEM JUROS", icon: "credit-card" },
+            ...(brand?.settings?.freeShippingThreshold
+              ? [{ text: `FRETE GRÁTIS ACIMA DE R$${brand.settings.freeShippingThreshold}`, icon: "truck" as const }]
+              : []),
+            ...(brand?.features?.installments && brand?.settings?.maxInstallments > 1
+              ? [{ text: `PARCELE EM ATÉ ${brand.settings.maxInstallments}X SEM JUROS`, icon: "credit-card" as const }]
+              : []),
           ]}
           bgColor="#B91C1C"
           textColor="#FFFFFF"
@@ -2319,7 +2099,7 @@ const HomePage = () => {
             </ScrollReveal>
 
             <StaggerContainer
-              className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 md:gap-6 lg:gap-8"
+              className="flex flex-wrap justify-center gap-4 md:gap-6 lg:gap-8"
               staggerDelay={0.1}
             >
               {visibleFeaturedProducts.map((product: any) => {
@@ -2328,12 +2108,26 @@ const HomePage = () => {
                       .sort((a: any, b: any) => (a.position || 0) - (b.position || 0))
                       .map((img: any) => img.url)
                   : product.images || [];
-                const colors = product.product_variants
+                const d1Order = product.variant_dimensions?.[0]?.values?.map((v: any) => v.name) || [];
+                const d2Order = product.variant_dimensions?.[1]?.values?.map((v: any) => v.name) || [];
+                const rawColors = product.product_variants
                   ? [...new Set(product.product_variants.map((v: any) => v.color_hex || v.color).filter(Boolean))]
                   : product.colors || [];
-                const sizes = product.product_variants
+                const colors = d1Order.length > 0
+                  ? [...rawColors].sort((a: any, b: any) => {
+                      const iA = d1Order.indexOf(a); const iB = d1Order.indexOf(b);
+                      return (iA === -1 ? 999 : iA) - (iB === -1 ? 999 : iB);
+                    })
+                  : rawColors;
+                const rawSizes = product.product_variants
                   ? [...new Set(product.product_variants.map((v: any) => v.size).filter(Boolean))]
                   : product.sizes || [];
+                const sizes = d2Order.length > 0
+                  ? [...rawSizes].sort((a: any, b: any) => {
+                      const iA = d2Order.indexOf(a); const iB = d2Order.indexOf(b);
+                      return (iA === -1 ? 999 : iA) - (iB === -1 ? 999 : iB);
+                    })
+                  : rawSizes;
                 const stock = product.product_variants
                   ? product.product_variants.reduce((sum: number, v: any) => sum + (v.stock || 0), 0)
                   : product.stock || 0;
@@ -2348,7 +2142,7 @@ const HomePage = () => {
                   reviews: product.reviews || 0,
                 };
                 return (
-                  <StaggerItem key={product.id}>
+                  <StaggerItem key={product.id} className="w-[calc(50%-8px)] md:w-[calc(33.333%-16px)] lg:w-[calc(25%-24px)]">
                     <ProductCard
                       product={normalized}
                       onView={(p) => navigate(`/product/${p.id}`)}
@@ -2453,11 +2247,11 @@ const HomePage = () => {
       ))}
 
       {/* 6. Seção TABACARIA - Produtos com tabs de categoria */}
-      {tabacariaCategories && tabacariaCategories.length > 0 && (
+      {visibleTabacariaCategories && visibleTabacariaCategories.length > 0 && (
         <ScrollReveal direction="up" distance={50}>
           <ProductSectionWithTabs
             title="TABACARIA"
-            categories={tabacariaCategories}
+            categories={visibleTabacariaCategories}
             showAllOption={false}
             maxProducts={4}
             sectionId="tabacaria"
@@ -2535,14 +2329,25 @@ const ProductListPage = () => {
   const { data: allProducts, isLoading: loadingAll } = useProducts();
   const { data: categoryProducts, isLoading: loadingCategory } = useProductsByCategorySlug(categorySlug || '');
   const { data: collectionProducts, isLoading: loadingCollection } = useProductsByCollectionSlug(collectionSlug || '');
-  const { data: categories } = useCategoryTree(); // Hierárquico para sidebar
+  const { data: rawCategories } = useCategoryTree(); // Hierárquico para sidebar
+
+  // Filtrar categorias de tabacaria para usuários não logados
+  const categories = useMemo(() => {
+    if (!rawCategories) return [];
+    if (user) return rawCategories;
+    return rawCategories
+      .filter((cat: Category) => !cat.is_tabacaria)
+      .map((cat: Category) => ({
+        ...cat,
+        children: cat.children?.filter((sub: Category) => !sub.is_tabacaria),
+      }));
+  }, [rawCategories, user]);
 
   // Busca fuzzy (só quando houver query)
   const { products: searchResults, isLoading: loadingSearch, isSearching } = useFuzzySearch(searchQuery);
 
   const [filterState, setFilterState] = useState<FilterState>({
-    color: [],
-    size: [],
+    dimensions: {},
     priceRange: null,
     sort: 'relevance'
   });
@@ -2550,8 +2355,7 @@ const ProductListPage = () => {
   const [priceMax, setPriceMax] = useState('');
 
   // Pending filter selections (applied only on "Aplicar Filtros")
-  const [pendingColors, setPendingColors] = useState<string[]>([]);
-  const [pendingSizes, setPendingSizes] = useState<string[]>([]);
+  const [pendingDimensions, setPendingDimensions] = useState<Record<string, string[]>>({});
 
   const [isMobileFiltersOpen, setIsMobileFiltersOpen] = useState(false);
 
@@ -2561,21 +2365,53 @@ const ProductListPage = () => {
     : (collectionSlug ? (collectionProducts || []) : (categorySlug ? (categoryProducts || []) : (allProducts || [])));
   const isLoading = isSearching ? loadingSearch : (collectionSlug ? loadingCollection : (categorySlug ? loadingCategory : loadingAll));
 
-  // Cores com hex real das variantes
-  const availableColors = [...new Map(
-    baseProducts.flatMap((p: any) =>
-      (p.product_variants || [])
-        .filter((v: any) => v.color)
-        .map((v: any) => ({ name: v.color, hex: v.color_hex }))
-    ).map((c: any) => [c.name, c])
-  ).values()];
+  // Dimensões dinâmicas extraídas de variant_dimensions dos produtos
+  const availableDimensions = useMemo(() => {
+    const dimensionMap: Record<string, { values: Set<string>; index: number }> = {};
 
-  // Tamanhos únicos das variantes
-  const availableSizes = [...new Set(
-    baseProducts.flatMap((p: any) =>
-      (p.product_variants || []).map((v: any) => v.size).filter(Boolean)
-    )
-  )];
+    baseProducts.forEach((p: any) => {
+      const dims = p.variant_dimensions as Array<{ name: string; type: string; values: Array<{ name: string }> }> | null;
+      const variants = p.product_variants || [];
+
+      if (dims && dims.length > 0) {
+        // Produto com variant_dimensions definido — usar nomes das dimensões
+        dims.forEach((dim: any, idx: number) => {
+          const dimName = dim.name || `Opção ${idx + 1}`;
+          if (!dimensionMap[dimName]) {
+            dimensionMap[dimName] = { values: new Set(), index: idx };
+          }
+          // Coletar valores reais das variantes (color = dim[0], size = dim[1])
+          variants.forEach((v: any) => {
+            const val = idx === 0 ? v.color : idx === 1 ? v.size : null;
+            if (val && val.trim()) dimensionMap[dimName].values.add(val);
+          });
+        });
+      } else if (variants.length > 0) {
+        // Produto sem variant_dimensions — inferir das variantes
+        const hasColor = variants.some((v: any) => v.color && v.color.trim());
+        const hasSize = variants.some((v: any) => v.size && v.size.trim());
+        if (hasColor) {
+          const dimName = 'Opção';
+          if (!dimensionMap[dimName]) dimensionMap[dimName] = { values: new Set(), index: 0 };
+          variants.forEach((v: any) => { if (v.color && v.color.trim()) dimensionMap[dimName].values.add(v.color); });
+        }
+        if (hasSize) {
+          const dimName = 'Tamanho';
+          if (!dimensionMap[dimName]) dimensionMap[dimName] = { values: new Set(), index: 1 };
+          variants.forEach((v: any) => { if (v.size && v.size.trim()) dimensionMap[dimName].values.add(v.size); });
+        }
+      }
+    });
+
+    // Converter para array ordenado por index
+    return Object.entries(dimensionMap)
+      .sort((a, b) => a[1].index - b[1].index)
+      .map(([name, data]) => ({
+        name,
+        values: [...data.values],
+        index: data.index
+      }));
+  }, [baseProducts]);
 
   // Faixa de preço real dos produtos
   const allPrices = baseProducts.map((p: any) => {
@@ -2592,16 +2428,16 @@ const ProductListPage = () => {
     // Filtro de tabaco: só mostra se o usuário estiver logado
     if (p.is_tabaco && !user) return false;
 
-    // Filtro por cor
-    if (filterState.color.length > 0) {
-      const productColors = (p.product_variants || []).map((v: any) => v.color).filter(Boolean);
-      if (!productColors.some((c: string) => filterState.color.includes(c))) return false;
-    }
-
-    // Filtro por tamanho
-    if (filterState.size.length > 0) {
-      const productSizes = (p.product_variants || []).map((v: any) => v.size).filter(Boolean);
-      if (!productSizes.some((s: string) => filterState.size.includes(s))) return false;
+    // Filtros por dimensões dinâmicas
+    for (const [dimName, selectedValues] of Object.entries(filterState.dimensions) as [string, string[]][]) {
+      if (!selectedValues || selectedValues.length === 0) continue;
+      const variants = p.product_variants || [];
+      // Descobrir qual campo da variante corresponde a essa dimensão
+      const dim = availableDimensions.find((d: any) => d.name === dimName);
+      const fieldIndex = dim?.index ?? 0;
+      const fieldName = fieldIndex === 0 ? 'color' : fieldIndex === 1 ? 'size' : 'color';
+      const productValues = variants.map((v: any) => v[fieldName]).filter(Boolean);
+      if (!productValues.some((val: string) => selectedValues.includes(val))) return false;
     }
 
     // Filtro por preço
@@ -2615,7 +2451,7 @@ const ProductListPage = () => {
     }
 
     return true;
-  }), [baseProducts, user, filterState]);
+  }), [baseProducts, user, filterState, availableDimensions]);
 
   // Ordenação
   const sortedProducts = [...filteredProducts].sort((a: any, b: any) => {
@@ -2624,12 +2460,14 @@ const ProductListPage = () => {
     return 0; // relevance = ordem original
   });
 
-  const togglePendingFilter = (type: 'color' | 'size', value: string) => {
-    if (type === 'color') {
-      setPendingColors(prev => prev.includes(value) ? prev.filter(v => v !== value) : [...prev, value]);
-    } else {
-      setPendingSizes(prev => prev.includes(value) ? prev.filter(v => v !== value) : [...prev, value]);
-    }
+  const togglePendingDimension = (dimName: string, value: string) => {
+    setPendingDimensions(prev => {
+      const current = prev[dimName] || [];
+      const updated = current.includes(value)
+        ? current.filter(v => v !== value)
+        : [...current, value];
+      return { ...prev, [dimName]: updated };
+    });
   };
 
   const applyFilters = () => {
@@ -2637,21 +2475,18 @@ const ProductListPage = () => {
     const max = priceMax ? Number(priceMax) : null;
     setFilterState(prev => ({
       ...prev,
-      color: [...pendingColors],
-      size: [...pendingSizes],
+      dimensions: { ...pendingDimensions },
       priceRange: min !== null || max !== null ? [min ?? minPriceAvailable, max ?? maxPriceAvailable] : null
     }));
   };
 
   const clearFilters = () => {
-    setPendingColors([]);
-    setPendingSizes([]);
+    setPendingDimensions({});
     setPriceMin('');
     setPriceMax('');
     setFilterState(prev => ({
       ...prev,
-      color: [],
-      size: [],
+      dimensions: {},
       priceRange: null
     }));
   };
@@ -2781,46 +2616,24 @@ const ProductListPage = () => {
             </div>
           )}
 
-          {/* Cores - Swatches com hex real do banco */}
-          {availableColors.length > 0 && (
-            <div className="pb-8 border-b border-gray-100">
-              <h3 className="font-bold text-sm uppercase tracking-wider mb-5 text-gray-900">Cores</h3>
-              <div className="flex flex-wrap gap-3">
-                {availableColors.map((colorObj: any) => (
-                  <button
-                    key={colorObj.name}
-                    onClick={() => togglePendingFilter('color', colorObj.name)}
-                    className={`w-10 h-10 rounded-full border-2 relative transition-all duration-200 hover:scale-110 active:scale-95 ${pendingColors.includes(colorObj.name) ? 'shadow-md border-transparent' : 'border-gray-200 hover:border-gray-300'}`}
-                    style={{
-                      backgroundColor: colorObj.hex || '#cccccc',
-                      ...(pendingColors.includes(colorObj.name) && { outline: `3px solid ${primaryColor}`, outlineOffset: '2px' })
-                    }}
-                    title={colorObj.name}
-                    aria-label={`Filtrar por cor: ${colorObj.name}`}
-                  />
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* Tamanhos - Premium Buttons */}
-          {availableSizes.length > 0 && (
-            <div className="pb-8 border-b border-gray-100">
-              <h3 className="font-bold text-sm uppercase tracking-wider mb-5 text-gray-900">Tamanho</h3>
+          {/* Filtros dinâmicos por dimensão */}
+          {availableDimensions.map((dim) => (
+            <div key={dim.name} className="pb-8 border-b border-gray-100">
+              <h3 className="font-bold text-sm uppercase tracking-wider mb-5 text-gray-900">{dim.name}</h3>
               <div className="grid grid-cols-3 gap-2">
-                {availableSizes.map((size: string) => (
+                {dim.values.map((value: string) => (
                   <button
-                    key={size}
-                    onClick={() => togglePendingFilter('size', size)}
-                    className={`py-3 text-sm font-bold border-2 rounded transition-all duration-200 hover:scale-105 active:scale-95 ${pendingSizes.includes(size) ? 'text-white shadow-md' : 'bg-white text-gray-700 border-gray-200 hover:border-gray-300'}`}
-                    style={pendingSizes.includes(size) ? { backgroundColor: primaryColor, borderColor: primaryColor } : {}}
+                    key={value}
+                    onClick={() => togglePendingDimension(dim.name, value)}
+                    className={`py-3 text-sm font-bold border-2 rounded transition-all duration-200 hover:scale-105 active:scale-95 ${(pendingDimensions[dim.name] || []).includes(value) ? 'text-white shadow-md' : 'bg-white text-gray-700 border-gray-200 hover:border-gray-300'}`}
+                    style={(pendingDimensions[dim.name] || []).includes(value) ? { backgroundColor: primaryColor, borderColor: primaryColor } : {}}
                   >
-                    {size}
+                    {value}
                   </button>
                 ))}
               </div>
             </div>
-          )}
+          ))}
 
           {/* Botões Aplicar / Limpar Filtros */}
           <div className="space-y-3 pt-2">
@@ -3072,57 +2885,31 @@ const ProductListPage = () => {
                   </motion.div>
                 )}
 
-                {/* Tamanhos */}
-                {availableSizes.length > 0 && (
+                {/* Filtros dinâmicos por dimensão */}
+                {availableDimensions.map((dim, idx) => (
                   <motion.div
+                    key={dim.name}
                     variants={{
                       hidden: { opacity: 0, y: 10 },
                       visible: { opacity: 1, y: 0 }
                     }}
-                    className="pb-8 border-b border-gray-100"
+                    className={idx < availableDimensions.length - 1 ? 'pb-8 border-b border-gray-100' : ''}
                   >
-                    <h3 className="font-bold text-sm mb-4 uppercase tracking-wider text-gray-900">Tamanho</h3>
+                    <h3 className="font-bold text-sm mb-4 uppercase tracking-wider text-gray-900">{dim.name}</h3>
                     <div className="grid grid-cols-4 gap-2">
-                      {availableSizes.map((size: string) => (
+                      {dim.values.map((value: string) => (
                         <button
-                          key={size}
-                          onClick={() => togglePendingFilter('size', size)}
-                          className={`py-3 text-sm font-bold border-2 rounded-lg transition-all duration-200 min-h-[48px] active:scale-95 ${pendingSizes.includes(size) ? 'text-white shadow-md' : 'bg-white text-gray-700 border-gray-200'}`}
-                          style={pendingSizes.includes(size) ? { backgroundColor: primaryColor, borderColor: primaryColor } : {}}
+                          key={value}
+                          onClick={() => togglePendingDimension(dim.name, value)}
+                          className={`py-3 text-sm font-bold border-2 rounded-lg transition-all duration-200 min-h-[48px] active:scale-95 ${(pendingDimensions[dim.name] || []).includes(value) ? 'text-white shadow-md' : 'bg-white text-gray-700 border-gray-200'}`}
+                          style={(pendingDimensions[dim.name] || []).includes(value) ? { backgroundColor: primaryColor, borderColor: primaryColor } : {}}
                         >
-                          {size}
+                          {value}
                         </button>
                       ))}
                     </div>
                   </motion.div>
-                )}
-
-                {/* Cores - com hex real do banco */}
-                {availableColors.length > 0 && (
-                  <motion.div
-                    variants={{
-                      hidden: { opacity: 0, y: 10 },
-                      visible: { opacity: 1, y: 0 }
-                    }}
-                  >
-                    <h3 className="font-bold text-sm mb-4 uppercase tracking-wider text-gray-900">Cores</h3>
-                    <div className="flex flex-wrap gap-3">
-                      {availableColors.map((colorObj: any) => (
-                        <button
-                          key={colorObj.name}
-                          onClick={() => togglePendingFilter('color', colorObj.name)}
-                          className={`w-11 h-11 rounded-full border-2 relative transition-all duration-200 hover:scale-110 active:scale-95 ${pendingColors.includes(colorObj.name) ? 'shadow-md border-transparent' : 'border-gray-200'}`}
-                          style={{
-                            backgroundColor: colorObj.hex || '#cccccc',
-                            ...(pendingColors.includes(colorObj.name) && { outline: `3px solid ${primaryColor}`, outlineOffset: '2px' })
-                          }}
-                          title={colorObj.name}
-                          aria-label={`Filtrar por cor: ${colorObj.name}`}
-                        />
-                      ))}
-                    </div>
-                  </motion.div>
-                )}
+                ))}
               </motion.div>
 
               {/* Footer - Premium Buttons */}
@@ -3190,9 +2977,41 @@ const ProductDetailPage = () => {
   // Extrair TODAS as variantes (incluindo sem estoque)
   const variants = product?.product_variants || [];
 
-  // Extrair cores e tamanhos únicos de TODAS as variantes
-  const colors = [...new Set(variants.map((v: any) => v.color).filter(Boolean))] as string[];
-  const sizes = [...new Set(variants.map((v: any) => v.size).filter(Boolean))] as string[];
+  // Dimensões dinâmicas das variantes (variant_dimensions vem do produto via *)
+  const variantDimensions = product?.variant_dimensions as Array<{ name: string; type: string; values?: any[] }> | null;
+  const dim1Label = variantDimensions?.[0]?.name || 'Cor';
+  const dim1Type = variantDimensions?.[0]?.type || 'color';
+  const dim2Label = variantDimensions?.[1]?.name || 'Tamanho';
+  const dim2Type = variantDimensions?.[1]?.type || 'text';
+
+  // Extrair cores e tamanhos únicos de TODAS as variantes, respeitando a ordem de variant_dimensions
+  const rawColors = [...new Set(variants.map((v: any) => v.color).filter(Boolean))] as string[];
+  const rawSizes = [...new Set(variants.map((v: any) => v.size).filter(Boolean))] as string[];
+
+  const dim1Order = variantDimensions?.[0]?.values?.map((v: any) => v.name) || [];
+  const dim2Order = variantDimensions?.[1]?.values?.map((v: any) => v.name) || [];
+
+  const colors = dim1Order.length > 0
+    ? [...rawColors].sort((a, b) => {
+        const idxA = dim1Order.indexOf(a);
+        const idxB = dim1Order.indexOf(b);
+        if (idxA === -1 && idxB === -1) return 0;
+        if (idxA === -1) return 1;
+        if (idxB === -1) return -1;
+        return idxA - idxB;
+      })
+    : rawColors;
+
+  const sizes = dim2Order.length > 0
+    ? [...rawSizes].sort((a, b) => {
+        const idxA = dim2Order.indexOf(a);
+        const idxB = dim2Order.indexOf(b);
+        if (idxA === -1 && idxB === -1) return 0;
+        if (idxA === -1) return 1;
+        if (idxB === -1) return -1;
+        return idxA - idxB;
+      })
+    : rawSizes;
 
   // Debug temporário
   useEffect(() => {
@@ -3355,7 +3174,17 @@ const ProductDetailPage = () => {
     const finalSize = selectedSize || '';
     const finalColor = selectedColor || '';
 
-    addToCart(cartProduct as any, finalSize, finalColor);
+    // Encontrar o variant_id correspondente
+    let matchedVariant: any = null;
+    if (sizes.length === 0 && finalColor) {
+      matchedVariant = variants.find((v: any) => v.color === finalColor && !v.size);
+    } else if (finalColor && finalSize) {
+      matchedVariant = variants.find((v: any) => v.color === finalColor && v.size === finalSize);
+    } else if (colors.length === 0 && finalSize) {
+      matchedVariant = variants.find((v: any) => v.size === finalSize && !v.color);
+    }
+
+    addToCart(cartProduct as any, finalSize, finalColor, matchedVariant?.id, matchedVariant?.stock);
     setIsCartOpen(true);
   };
 
@@ -3535,11 +3364,11 @@ const ProductDetailPage = () => {
           </div>
 
           <div className="space-y-5 mb-6 rounded-xl bg-gray-50/60 p-4 -mx-4 sm:mx-0 sm:p-0 sm:bg-transparent sm:rounded-none">
-            {/* Cores */}
+            {/* Dimensão 1 (color column) */}
             {colors.length > 0 && (
               <div>
                 <p className="text-[11px] font-semibold uppercase tracking-widest text-gray-400 mb-3">
-                  Cor: <span className="text-gray-800 normal-case tracking-normal font-medium text-xs">{selectedColor}</span>
+                  {dim1Label}: <span className="text-gray-800 normal-case tracking-normal font-medium text-xs">{selectedColor}</span>
                 </p>
                 <div className="flex flex-wrap gap-2.5">
                   {colors.map((color: string) => {
@@ -3547,7 +3376,7 @@ const ProductDetailPage = () => {
                       ? getVariantStock(color, '') > 0
                       : sizes.some(size => getVariantStock(color, size) > 0);
 
-                    return (
+                    return dim1Type === 'color' ? (
                       <button
                         key={color}
                         onClick={() => {
@@ -3573,29 +3402,78 @@ const ProductDetailPage = () => {
                           </div>
                         )}
                       </button>
+                    ) : (
+                      <button
+                        key={color}
+                        onClick={() => {
+                          if (!hasStock) return;
+                          setSelectedColor(color);
+                          if (selectedSize && getVariantStock(color, selectedSize) <= 0) {
+                            setSelectedSize('');
+                          }
+                        }}
+                        disabled={!hasStock}
+                        className={`min-w-[42px] h-10 px-3 flex items-center justify-center font-semibold text-sm rounded-lg border transition-all duration-200 ${
+                          !hasStock
+                            ? 'bg-gray-50 text-gray-300 border-gray-100 cursor-not-allowed line-through'
+                            : selectedColor === color
+                            ? 'text-white border-transparent shadow-sm'
+                            : 'bg-white text-gray-800 border-gray-200 hover:border-gray-800'
+                        }`}
+                        style={selectedColor === color && hasStock ? { backgroundColor: primaryColor, borderColor: primaryColor } : {}}
+                      >
+                        {color}
+                      </button>
                     );
                   })}
                 </div>
               </div>
             )}
 
-            {/* Tamanhos */}
+            {/* Dimensão 2 (size column) */}
             {sizes.length > 0 && (
               <div>
                 <div className="flex justify-between items-center mb-3">
                   <p className="text-[11px] font-semibold uppercase tracking-widest text-gray-400">
-                    Tamanho: <span className="text-gray-800 normal-case tracking-normal font-medium text-xs">{selectedSize || 'Selecione'}</span>
+                    {dim2Label}: <span className="text-gray-800 normal-case tracking-normal font-medium text-xs">{selectedSize || 'Selecione'}</span>
                   </p>
-                  <button className="text-[11px] text-gray-400 hover:text-gray-900 transition-colors underline underline-offset-2">
-                    Tabela de medidas
-                  </button>
+                  {dim2Type === 'text' && (
+                    <button className="text-[11px] text-gray-400 hover:text-gray-900 transition-colors underline underline-offset-2">
+                      Tabela de medidas
+                    </button>
+                  )}
                 </div>
                 <div className="flex flex-wrap gap-2">
                   {sizes.map((size: string) => {
                     const stock = getVariantStock(selectedColor, size);
                     const isOutOfStock = stock <= 0;
 
-                    return (
+                    return dim2Type === 'color' ? (
+                      <button
+                        key={size}
+                        onClick={() => {
+                          if (!isOutOfStock) {
+                            setSelectedSize(size);
+                            setShowError(false);
+                          }
+                        }}
+                        className={`w-8 h-8 rounded-full transition-all duration-200 relative flex-shrink-0 ${
+                          selectedSize === size
+                            ? 'ring-2 ring-offset-2 scale-110 shadow-sm'
+                            : !isOutOfStock
+                              ? 'ring-1 ring-gray-200 hover:ring-gray-400 hover:scale-105'
+                              : 'ring-1 ring-gray-100 opacity-30 cursor-not-allowed'
+                        }`}
+                        style={{ backgroundColor: size }}
+                        title={`${size}${isOutOfStock ? ' (Sem estoque)' : ''}`}
+                      >
+                        {isOutOfStock && (
+                          <div className="absolute inset-0 rounded-full overflow-hidden flex items-center justify-center">
+                            <div className="w-[130%] h-px bg-red-400 rotate-45 absolute"></div>
+                          </div>
+                        )}
+                      </button>
+                    ) : (
                       <button
                         key={size}
                         onClick={() => {
@@ -3622,7 +3500,7 @@ const ProductDetailPage = () => {
                   })}
                 </div>
                 {showError && !selectedSize && (
-                  <p className="text-red-500 text-xs mt-2 font-medium">Selecione um tamanho para continuar.</p>
+                  <p className="text-red-500 text-xs mt-2 font-medium">Selecione um {dim2Label.toLowerCase()} para continuar.</p>
                 )}
                 {selectedSize && selectedColor && (
                   <StockWarning
@@ -3861,7 +3739,7 @@ const App = () => {
     cartCount,
   } = useCartStore();
 
-  const addToCart = (product: Product, size: string, color: string) => {
+  const addToCart = (product: Product, size: string, color: string, variantId?: string, stock?: number) => {
     storeAddToCart({
       id: product.id,
       name: product.name,
@@ -3870,6 +3748,8 @@ const App = () => {
       selectedSize: size,
       selectedColor: color,
       quantity: 1,
+      variantId,
+      stock,
     });
   };
 
@@ -3887,7 +3767,7 @@ const App = () => {
                 <ScrollToTop />
                 <SEOHead />
                 <AgeVerificationPopup />
-                <PromoPopup />
+                {/* <PromoPopup /> — desabilitado até a tabela promos ser criada */}
                 <div className="flex flex-col min-h-screen">
                   <Header />
                   <div className="flex-1">
@@ -3901,6 +3781,7 @@ const App = () => {
                         <Route path="/product/:id" element={<ProductDetailPage />} />
                         <Route path="/cart" element={<CartPage />} />
                         <Route path="/checkout" element={<CheckoutPage />} />
+                        <Route path="/order-confirmation/:orderId" element={<OrderConfirmationPage />} />
                         <Route path="/about" element={<Navigate to="/page/sobre-nos" replace />} />
                         <Route path="/club" element={<Navigate to="/page/sobre-nos" replace />} />
                         <Route path="/faq" element={<FAQPage />} />
@@ -3920,6 +3801,7 @@ const App = () => {
                   <Route path="/product/:id" element={<ProductDetailPage />} />
                   <Route path="/cart" element={<CartPage />} />
                   <Route path="/checkout" element={<CheckoutPage />} />
+                  <Route path="/order-confirmation/:orderId" element={<OrderConfirmationPage />} />
                   <Route path="/about" element={<Navigate to="/page/sobre-nos" replace />} />
                   <Route path="/club" element={<Navigate to="/page/sobre-nos" replace />} />
                   <Route path="/faq" element={<FAQPage />} />

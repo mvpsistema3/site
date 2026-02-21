@@ -10,6 +10,12 @@ interface VariantStock {
   sku?: string;
 }
 
+interface VariantDimension {
+  name: string;
+  type: string;
+  values?: any[];
+}
+
 interface VariantSelectorProps {
   product: Product;
   selectedColor: string;
@@ -19,6 +25,7 @@ interface VariantSelectorProps {
   variantStock?: VariantStock[];
   showStockIndicator?: boolean;
   compactMode?: boolean;
+  variantDimensions?: VariantDimension[] | null;
 }
 
 const colorNames: Record<string, string> = {
@@ -48,7 +55,12 @@ export const VariantSelector: React.FC<VariantSelectorProps> = ({
   variantStock = [],
   showStockIndicator = true,
   compactMode = false,
+  variantDimensions = null,
 }) => {
+  const dim1Label = variantDimensions?.[0]?.name || 'Cor';
+  const dim1Type = variantDimensions?.[0]?.type || 'color';
+  const dim2Label = variantDimensions?.[1]?.name || 'Tamanho';
+  const dim2Type = variantDimensions?.[1]?.type || 'text';
   const { brand } = useBrandConfig();
   const [availableSizes, setAvailableSizes] = useState<string[]>([]);
   const [availableColors, setAvailableColors] = useState<string[]>([]);
@@ -124,18 +136,18 @@ export const VariantSelector: React.FC<VariantSelectorProps> = ({
 
   return (
     <div className={`space-y-${compactMode ? '3' : '4'}`}>
-      {/* Seletor de Cor */}
+      {/* Seletor de Dimensão 1 (color column) */}
       {product.colors.length > 0 && (
         <div>
           <label className={`block text-${compactMode ? 'sm' : 'base'} font-medium mb-2`}>
-            Cor: <span className="font-normal">{colorNames[selectedColor] || selectedColor}</span>
+            {dim1Label}: <span className="font-normal">{dim1Type === 'color' ? (colorNames[selectedColor] || selectedColor) : selectedColor}</span>
           </label>
           <div className="flex flex-wrap gap-2">
             {product.colors.map(color => {
               const isAvailable = isVariantAvailable(color, selectedSize);
               const isSelected = selectedColor === color;
 
-              return (
+              return dim1Type === 'color' ? (
                 <button
                   key={color}
                   onClick={() => isAvailable && onColorChange(color)}
@@ -189,17 +201,34 @@ export const VariantSelector: React.FC<VariantSelectorProps> = ({
                     </div>
                   )}
                 </button>
+              ) : (
+                <button
+                  key={color}
+                  onClick={() => isAvailable && onColorChange(color)}
+                  disabled={!isAvailable}
+                  className={`
+                    ${compactMode ? 'px-3 py-1.5 text-sm' : 'px-4 py-2'}
+                    border rounded-lg transition-all duration-200
+                    ${isSelected
+                      ? `bg-${brand.theme.colors.primary} text-white border-${brand.theme.colors.primary}`
+                      : `bg-white text-gray-700 border-gray-300 hover:border-${brand.theme.colors.primary}`
+                    }
+                    ${!isAvailable ? 'opacity-30 cursor-not-allowed line-through' : 'cursor-pointer'}
+                  `}
+                >
+                  {color}
+                </button>
               );
             })}
           </div>
         </div>
       )}
 
-      {/* Seletor de Tamanho */}
+      {/* Seletor de Dimensão 2 (size column) */}
       {product.sizes.length > 0 && (
         <div>
           <label className={`block text-${compactMode ? 'sm' : 'base'} font-medium mb-2`}>
-            Tamanho: <span className="font-normal">{selectedSize || 'Selecione'}</span>
+            {dim2Label}: <span className="font-normal">{selectedSize || 'Selecione'}</span>
           </label>
           <div className="flex flex-wrap gap-2">
             {sortedSizes.map(size => {
@@ -264,7 +293,7 @@ export const VariantSelector: React.FC<VariantSelectorProps> = ({
       {/* Aviso de Seleção */}
       {(!selectedColor || !selectedSize) && (
         <p className="text-sm text-gray-500 italic">
-          Por favor, selecione {!selectedColor && !selectedSize ? 'cor e tamanho' : !selectedColor ? 'uma cor' : 'um tamanho'}
+          Por favor, selecione {!selectedColor && !selectedSize ? `${dim1Label.toLowerCase()} e ${dim2Label.toLowerCase()}` : !selectedColor ? `um(a) ${dim1Label.toLowerCase()}` : `um(a) ${dim2Label.toLowerCase()}`}
         </p>
       )}
     </div>

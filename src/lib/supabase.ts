@@ -88,6 +88,7 @@ export type Category = {
   active: boolean;
   featured: boolean;
   show_in_menu: boolean;
+  is_tabacaria?: boolean;
   created_at: string;
   children?: Category[];
 };

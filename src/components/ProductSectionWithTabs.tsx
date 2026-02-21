@@ -22,15 +22,37 @@ function normalizeProduct(product: any) {
         .map((img: any) => img.url)
     : product.images || [];
 
-  // Extrair cores das variantes
-  const colors = product.product_variants
+  // Extrair cores e tamanhos das variantes, respeitando a ordem de variant_dimensions
+  const dim1Order = product.variant_dimensions?.[0]?.values?.map((v: any) => v.name) || [];
+  const dim2Order = product.variant_dimensions?.[1]?.values?.map((v: any) => v.name) || [];
+
+  const rawColors = product.product_variants
     ? [...new Set(product.product_variants.map((v: any) => v.color_hex || v.color).filter(Boolean))]
     : product.colors || [];
+  const colors = dim1Order.length > 0
+    ? [...rawColors].sort((a, b) => {
+        const idxA = dim1Order.indexOf(a);
+        const idxB = dim1Order.indexOf(b);
+        if (idxA === -1 && idxB === -1) return 0;
+        if (idxA === -1) return 1;
+        if (idxB === -1) return -1;
+        return idxA - idxB;
+      })
+    : rawColors;
 
-  // Extrair tamanhos das variantes
-  const sizes = product.product_variants
+  const rawSizes = product.product_variants
     ? [...new Set(product.product_variants.map((v: any) => v.size).filter(Boolean))]
     : product.sizes || [];
+  const sizes = dim2Order.length > 0
+    ? [...rawSizes].sort((a, b) => {
+        const idxA = dim2Order.indexOf(a);
+        const idxB = dim2Order.indexOf(b);
+        if (idxA === -1 && idxB === -1) return 0;
+        if (idxA === -1) return 1;
+        if (idxB === -1) return -1;
+        return idxA - idxB;
+      })
+    : rawSizes;
 
   // Calcular estoque total
   const stock = product.product_variants
@@ -210,13 +232,14 @@ export function ProductSectionWithTabs({
           </div>
         ) : displayProducts.length > 0 ? (
           <>
-            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 md:gap-6 lg:gap-8">
+            <div className="flex flex-wrap justify-center gap-4 md:gap-6 lg:gap-8">
               {displayProducts.map((product: any) => (
-                <ProductCard
-                  key={product.id}
-                  product={product}
-                  onView={handleProductClick}
-                />
+                <div key={product.id} className="w-[calc(50%-8px)] md:w-[calc(33.333%-16px)] lg:w-[calc(25%-24px)]">
+                  <ProductCard
+                    product={product}
+                    onView={handleProductClick}
+                  />
+                </div>
               ))}
             </div>
 

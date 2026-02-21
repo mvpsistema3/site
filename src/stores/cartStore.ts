@@ -287,21 +287,24 @@ export const useCartStore = create<CartState>()(
       storage: createJSONStorage(() => cartStorage),
       partialize: (state) => ({
         cart: state.cart,
+        coupon: state.coupon,
         shipping: state.shipping,
         shippingCost: state.shippingCost,
       }),
       onRehydrateStorage: () => (state) => {
         if (state && state.cart.length > 0) {
           const subtotal = state.cart.reduce((acc, i) => acc + i.price * i.quantity, 0);
+          const discount = state.coupon?.discount || 0;
+          const total = Math.max(0, subtotal - discount);
           const shippingCost = state.shipping ? parseFloat(state.shipping.ShippingPrice) : 0;
 
           useCartStore.setState({
             cartSubtotal: subtotal,
             cartCount: state.cart.reduce((acc, i) => acc + i.quantity, 0),
-            discountAmount: 0,
-            cartTotal: subtotal,
+            discountAmount: discount,
+            cartTotal: total,
             shippingCost,
-            finalTotal: subtotal + shippingCost,
+            finalTotal: total + shippingCost,
           });
         }
       },

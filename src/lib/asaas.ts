@@ -1,39 +1,19 @@
-// Serviço Asaas - chama a Edge Function do Supabase para criar cobranças
+/**
+ * Asaas Payment Service — calls the create-asaas-payment Edge Function.
+ */
 
 import { supabase } from './supabase';
-
-export type BillingType = 'CREDIT_CARD' | 'PIX' | 'BOLETO';
-
-export interface AsaasCustomer {
-  name: string;
-  email: string;
-  cpfCnpj: string;
-  phone?: string;
-}
-
-export interface CreatePaymentInput {
-  customer: AsaasCustomer;
-  value: number;
-  billingType: BillingType;
-  description: string;
-  brandSlug: string;
-}
-
-export interface AsaasPaymentResult {
-  id: string;
-  invoiceUrl: string;
-  bankSlipUrl?: string;
-  pixQrCode?: string;
-  pixKey?: string;
-  status: string;
-}
+import type { CreatePaymentRequest, PaymentResponse, PaymentErrorResponse } from '../types/checkout.types';
 
 /**
- * Cria uma cobrança no Asaas via Edge Function
- * Suporta PIX, Boleto e Cartão de Crédito (sandbox)
+ * Create a payment via the Asaas Edge Function.
+ * Handles both authenticated and guest (anon key) requests.
  */
-export async function createAsaasPayment(input: CreatePaymentInput): Promise<AsaasPaymentResult> {
+export async function createAsaasPayment(
+  request: CreatePaymentRequest
+): Promise<PaymentResponse> {
   const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+  const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
   if (!supabaseUrl) {
     throw new Error('VITE_SUPABASE_URL não configurado');
@@ -42,19 +22,26 @@ export async function createAsaasPayment(input: CreatePaymentInput): Promise<Asa
   const session = await supabase.auth.getSession();
   const token = session.data.session?.access_token;
 
-  const res = await fetch(`${supabaseUrl}/functions/v1/create-payment`, {
+  const res = await fetch(`${supabaseUrl}/functions/v1/create-asaas-payment`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      'Authorization': token ? `Bearer ${token}` : '',
-      'apikey': import.meta.env.VITE_SUPABASE_ANON_KEY || '',
+      'Authorization': `Bearer ${token || anonKey}`,
+      'apikey': anonKey || '',
     },
-    body: JSON.stringify(input),
+    body: JSON.stringify(request),
   });
 
   if (!res.ok) {
-    const err = await res.json().catch(() => ({ error: 'Erro desconhecido' }));
-    throw new Error(err.error || `Erro HTTP ${res.status}`);
+    let errorMessage = `Erro HTTP ${res.status}`;
+    try {
+      const err: PaymentErrorResponse = await res.json();
+      console.error('[Asaas Payment Error]', err);
+      errorMessage = err.error?.message || errorMessage;
+    } catch {
+      // response wasn't JSON
+    }
+    throw new Error(errorMessage);
   }
 
   return res.json();
