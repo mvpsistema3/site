@@ -315,3 +315,13 @@ export const useCartStore = create<CartState>()(
     }
   )
 );
+
+// Fallback: garante que _hasHydrated seja setado mesmo se onRehydrateStorage falhar
+if (useCartStore.persist.hasHydrated()) {
+  useCartStore.setState({ _hasHydrated: true });
+}
+useCartStore.persist.onFinishHydration(() => {
+  if (!useCartStore.getState()._hasHydrated) {
+    useCartStore.setState({ _hasHydrated: true });
+  }
+});
