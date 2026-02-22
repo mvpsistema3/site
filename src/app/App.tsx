@@ -3007,28 +3007,6 @@ const ProductDetailPage = () => {
       })
     : rawSizes;
 
-  // Debug temporário
-  useEffect(() => {
-    if (product) {
-      console.log('=== DEBUG VARIANTES ===');
-      console.log('Produto:', product.name);
-      console.log('product_variants raw:', product.product_variants);
-      console.log('Variantes filtradas (active):', variants);
-      console.log('Número de variantes:', variants.length);
-      console.log('Cores únicas:', colors);
-      console.log('Tamanhos únicos:', sizes);
-      variants.forEach((v: any, i: number) => {
-        console.log(`Variante ${i}:`, {
-          id: v.id,
-          color: v.color,
-          size: v.size,
-          stock: v.stock,
-          active: v.active
-        });
-      });
-    }
-  }, [product, variants.length, colors.length, sizes.length]);
-
   // Cores hexadecimais mapeadas
   const colorHexMap = variants.reduce((acc: Record<string, string>, v: any) => {
     if (v.color && v.color_hex) acc[v.color] = v.color_hex;
@@ -3117,7 +3095,6 @@ const ProductDetailPage = () => {
     if (colors.length > 0 && sizes.length === 0) {
       if (!selectedColor) return true; // Ainda não selecionou
       const stock = getVariantStock(selectedColor, '');
-      console.log(`Verificando estoque para cor ${selectedColor}:`, stock);
       return stock > 0;
     }
 

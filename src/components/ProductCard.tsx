@@ -15,7 +15,7 @@ interface ProductCardProps {
   onView?: (product: Product) => void;
 }
 
-export const ProductCard: React.FC<ProductCardProps> = ({
+export const ProductCard: React.FC<ProductCardProps> = React.memo(({
   product,
   onQuickBuy,
   onAddToWishlist,
@@ -180,4 +180,4 @@ export const ProductCard: React.FC<ProductCardProps> = ({
       </div>
     </div>
   );
-};
+});
