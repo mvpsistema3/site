@@ -1,6 +1,7 @@
 import React, { useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { Loader2 } from 'lucide-react';
+import { useUIStore } from '../stores/uiStore';
 
 interface ProtectedRouteProps {
   children: React.ReactNode;
@@ -12,7 +13,7 @@ export function ProtectedRoute({ children }: ProtectedRouteProps) {
   useEffect(() => {
     if (!loading && !user) {
       // Dispatch event to open login modal
-      window.dispatchEvent(new CustomEvent('open-login-modal'));
+      useUIStore.getState().openLoginModal();
     }
   }, [loading, user]);
 

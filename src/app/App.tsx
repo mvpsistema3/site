@@ -48,6 +48,7 @@ import { LoginModal } from '../components/LoginModal';
 import { UserMenu } from '../components/UserMenu';
 import { useAuth } from '../contexts/AuthContext';
 import { useCartStore } from '../stores/cartStore';
+import { useUIStore } from '../stores/uiStore';
 import { useToastStore } from '../stores/toastStore';
 import { useIsFavorite, useToggleFavorite, useFavoritesCount } from '../hooks/useFavorites';
 import { ImageLightbox } from '../components/ImageLightbox';
@@ -416,7 +417,7 @@ const ProductCard: React.FC<ProductCardProps> = ({ product }) => {
             e.stopPropagation();
             if (!user) {
               // Dispatch event to open login modal
-              window.dispatchEvent(new CustomEvent('open-login-modal'));
+              useUIStore.getState().openLoginModal();
               return;
             }
             toggleFavorite(product.id);
@@ -788,15 +789,7 @@ const Header = () => {
   const [isScrolled, setIsScrolled] = useState(false);
   const [expandedCategory, setExpandedCategory] = useState<string | null>(null);
   const [showSearchPreview, setShowSearchPreview] = useState(false);
-  const [isLoginModalOpen, setIsLoginModalOpen] = useState(false);
   const navigate = useBrandNavigate();
-
-  // Listen for open-login-modal events (from wishlist buttons when not logged in)
-  useEffect(() => {
-    const handler = () => setIsLoginModalOpen(true);
-    window.addEventListener('open-login-modal', handler);
-    return () => window.removeEventListener('open-login-modal', handler);
-  }, []);
 
   // Limpar busca em mudanças de rota (exceto quando está em /shop)
   useEffect(() => {
@@ -970,7 +963,7 @@ const Header = () => {
                 <UserMenu />
               ) : (
                 <button
-                  onClick={() => setIsLoginModalOpen(true)}
+                  onClick={() => useUIStore.getState().openLoginModal()}
                   className={`${iconBtnClass} text-gray-500 hover:text-gray-700 hover:bg-gray-50`}
                   aria-label="Login"
                 >
@@ -1313,7 +1306,6 @@ const Header = () => {
       </AnimatePresence>
 
       <CartDrawer />
-      <LoginModal isOpen={isLoginModalOpen} onClose={() => setIsLoginModalOpen(false)} />
     </>
   );
 };
@@ -3222,7 +3214,7 @@ const ProductDetailPage = () => {
       <div className="container mx-auto px-4 py-20 text-center animate-fade-in">
         <h1 className="font-sans text-4xl mb-4">ACESSO RESTRITO</h1>
         <p className="text-gray-500 mb-8">Este produto é restrito. Faça login para visualizar.</p>
-        <Button onClick={() => window.dispatchEvent(new CustomEvent('open-login-modal'))}>FAZER LOGIN</Button>
+        <Button onClick={() => useUIStore.getState().openLoginModal()}>FAZER LOGIN</Button>
       </div>
     );
   }
@@ -3575,7 +3567,7 @@ const ProductDetailPage = () => {
               className={`w-11 h-11 md:w-12 md:h-12 flex-shrink-0 border flex items-center justify-center rounded-lg transition-all duration-200 ${isFavorite ? 'border-red-300 bg-red-50 hover:bg-red-100' : 'border-gray-200 hover:border-gray-800 hover:bg-gray-50'}`}
               onClick={() => {
                 if (!user) {
-                  window.dispatchEvent(new CustomEvent('open-login-modal'));
+                  useUIStore.getState().openLoginModal();
                   return;
                 }
                 toggleFavorite(id || '');
@@ -3737,6 +3729,12 @@ const ProductDetailPage = () => {
   );
 };
 
+const GlobalLoginModal = () => {
+  const isOpen = useUIStore((s) => s.isLoginModalOpen);
+  const close = useUIStore((s) => s.closeLoginModal);
+  return <LoginModal isOpen={isOpen} onClose={close} />;
+};
+
 // --- App Container with Providers ---
 
 const App = () => {
@@ -3751,6 +3749,7 @@ const App = () => {
           <AuthProvider>
             <SearchProvider>
                 <ToastNotification />
+                <GlobalLoginModal />
                 <ScrollToTop />
                 <SEOHead />
                 <AgeVerificationPopup />

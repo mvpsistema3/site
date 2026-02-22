@@ -6,6 +6,7 @@ import { FeatureFlag } from './FeatureFlag';
 import { Heart, ShoppingBag, Star, Eye } from 'lucide-react';
 import { useFeatureFlag } from '../hooks/useFeatureFlag';
 import { useIsFavorite, useToggleFavorite } from '../hooks/useFavorites';
+import { useUIStore } from '../stores/uiStore';
 
 interface ProductCardProps {
   product: Product;
@@ -60,7 +61,7 @@ export const ProductCard: React.FC<ProductCardProps> = ({
           <button
             onClick={() => {
               if (!user) {
-                window.dispatchEvent(new CustomEvent('open-login-modal'));
+                useUIStore.getState().openLoginModal();
                 return;
               }
               toggleFavorite(product.id);

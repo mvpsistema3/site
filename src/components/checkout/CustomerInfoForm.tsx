@@ -7,6 +7,7 @@ import { formatPhone } from '../../lib/utils';
 import { useAuth } from '../../contexts/AuthContext';
 import { useCheckoutStore } from '../../hooks/useCheckout';
 import { useBrandColors } from '../../hooks/useTheme';
+import { useUIStore } from '../../stores/uiStore';
 import type { CustomerInfoData } from '../../types/checkout.types';
 
 interface FormValues {
@@ -96,7 +97,7 @@ export function CustomerInfoForm() {
   };
 
   const handleOpenLogin = () => {
-    window.dispatchEvent(new CustomEvent('open-login-modal'));
+    useUIStore.getState().openLoginModal();
   };
 
   const inputClassName =
