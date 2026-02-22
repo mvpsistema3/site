@@ -1559,14 +1559,6 @@ const CartPage = () => {
   const navigate = useBrandNavigate();
   const { primaryColor } = useBrandColors();
 
-  if (!hasHydrated) {
-    return (
-      <div className="flex items-center justify-center min-h-[40vh]">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-400" />
-      </div>
-    );
-  }
-
   // Usar cartStore para ter acesso ao shipping e cupons
   const {
     shipping,
@@ -1579,6 +1571,14 @@ const CartPage = () => {
     applyCoupon,
     removeCoupon
   } = useCartStore();
+
+  if (!hasHydrated) {
+    return (
+      <div className="flex items-center justify-center min-h-[40vh]">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-400" />
+      </div>
+    );
+  }
 
   const subtotal = cartSubtotal || cart.reduce((acc, item) => acc + (item.price * item.quantity), 0);
   const total = Math.max(0, subtotal - discountAmount) + shippingCost;
@@ -1909,8 +1909,8 @@ const HomePage = () => {
     }
   }, [banners]);
 
-  // Loading geral - só mostra loading se a marca ainda não carregou de nenhuma forma
-  const isLoading = brandLoading && !brand && !brandConfig;
+  // Loading geral - mostra loading enquanto BrandContext está buscando a marca
+  const isLoading = brandLoading;
 
   // Dados dinâmicos da marca
   const brandName = brand?.name || brandConfig.name || 'Sesh Store';
