@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, createContext, useContext } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { HashRouter, Routes, Route, Link, Navigate, useParams, useNavigate, useLocation, useNavigationType } from 'react-router-dom';
 import { QueryClientProvider } from '@tanstack/react-query';
 import { ReactQueryDevtools } from '@tanstack/react-query-devtools';
@@ -9,7 +9,7 @@ import {
   MapPin, Calendar, Lock, CheckCircle, Minus, Plus, Trash2, HelpCircle,
   ArrowRight, Package, LogOut
 } from 'lucide-react';
-import { Product, CartItem, FilterState } from '../types';
+import { Product, FilterState } from '../types';
 import { BrandProvider, useBrand } from '../contexts/BrandContext';
 import { SearchProvider, useSearch } from '../contexts/SearchContext';
 import { AuthProvider } from '../contexts/AuthContext';
@@ -47,7 +47,7 @@ import { PromoPopup } from '../components/PromoPopup';
 import { LoginModal } from '../components/LoginModal';
 import { UserMenu } from '../components/UserMenu';
 import { useAuth } from '../contexts/AuthContext';
-import { useCartStore, type CartItem as StoreCartItem } from '../stores/cartStore';
+import { useCartStore } from '../stores/cartStore';
 import { useToastStore } from '../stores/toastStore';
 import { useIsFavorite, useToggleFavorite, useFavoritesCount } from '../hooks/useFavorites';
 import { ImageLightbox } from '../components/ImageLightbox';
@@ -61,23 +61,6 @@ import { useBanners } from '../hooks/useBanners';
 import { ProductSectionWithTabs } from '../components/ProductSectionWithTabs';
 import { ToastNotification } from '../components/ToastNotification';
 import { motion, AnimatePresence, useScroll, useTransform, useInView } from 'framer-motion';
-
-// --- Contexts ---
-
-interface CartContextType {
-  cart: StoreCartItem[];
-  addToCart: (product: Product, size: string, color: string) => void;
-  removeFromCart: (productId: string, size: string, color: string) => void;
-  updateQuantity: (productId: string, size: string, color: string, delta: number) => void;
-  clearCart: () => void;
-  cartCount: number;
-  isCartOpen: boolean;
-  setIsCartOpen: (isOpen: boolean) => void;
-}
-
-const CartContext = createContext<CartContextType>({} as CartContextType);
-
-const useCart = () => useContext(CartContext);
 
 // --- Utils ---
 
@@ -557,7 +540,11 @@ const FAQSection = () => {
 };
 
 const CartDrawer = () => {
-  const { cart, removeFromCart, isCartOpen, setIsCartOpen, cartCount } = useCart();
+  const cart = useCartStore((s) => s.cart);
+  const removeFromCart = useCartStore((s) => s.removeFromCart);
+  const isCartOpen = useCartStore((s) => s.isCartOpen);
+  const setIsCartOpen = useCartStore((s) => s.setIsCartOpen);
+  const cartCount = useCartStore((s) => s.cartCount);
   const navigate = useBrandNavigate();
   const { primaryColor } = useBrandColors();
 
@@ -788,7 +775,8 @@ const CartDrawer = () => {
 
 const Header = () => {
   const location = useLocation();
-  const { cartCount, setIsCartOpen } = useCart();
+  const cartCount = useCartStore((s) => s.cartCount);
+  const setIsCartOpen = useCartStore((s) => s.setIsCartOpen);
   const { brand, brandConfig } = useBrand();
   const { primaryColor } = useBrandColors();
   const { searchQuery, setSearchQuery, clearSearch } = useSearch();
@@ -1571,7 +1559,10 @@ const Footer = () => {
 // --- Cart Page ---
 
 const CartPage = () => {
-  const { cart, updateQuantity, removeFromCart, clearCart } = useCart();
+  const cart = useCartStore((s) => s.cart);
+  const updateQuantity = useCartStore((s) => s.updateQuantity);
+  const removeFromCart = useCartStore((s) => s.removeFromCart);
+  const clearCart = useCartStore((s) => s.clearCart);
   const navigate = useBrandNavigate();
   const { primaryColor } = useBrandColors();
 
@@ -2946,7 +2937,8 @@ const ProductListPage = () => {
 const ProductDetailPage = () => {
   const { id } = useParams();
   const navigate = useBrandNavigate();
-  const { addToCart, setIsCartOpen } = useCart();
+  const storeAddToCart = useCartStore((s) => s.addToCart);
+  const setIsCartOpen = useCartStore((s) => s.setIsCartOpen);
   const { primaryColor } = useBrandColors();
   const { brand } = useBrand();
   const { user } = useAuth();
@@ -3185,7 +3177,17 @@ const ProductDetailPage = () => {
       matchedVariant = variants.find((v: any) => v.size === finalSize && !v.color);
     }
 
-    addToCart(cartProduct as any, finalSize, finalColor, matchedVariant?.id, matchedVariant?.stock);
+    storeAddToCart({
+      id: product.id,
+      name: product.name,
+      price: variantPrice,
+      images: images,
+      selectedSize: finalSize,
+      selectedColor: finalColor,
+      quantity: 1,
+      variantId: matchedVariant?.id,
+      stock: matchedVariant?.stock,
+    });
     setIsCartOpen(true);
   };
 
@@ -3729,31 +3731,6 @@ const ProductDetailPage = () => {
 // --- App Container with Providers ---
 
 const App = () => {
-  const {
-    cart,
-    isCartOpen,
-    setIsCartOpen,
-    addToCart: storeAddToCart,
-    removeFromCart,
-    updateQuantity,
-    clearCart,
-    cartCount,
-  } = useCartStore();
-
-  const addToCart = (product: Product, size: string, color: string, variantId?: string, stock?: number) => {
-    storeAddToCart({
-      id: product.id,
-      name: product.name,
-      price: product.price,
-      images: product.images || [],
-      selectedSize: size,
-      selectedColor: color,
-      quantity: 1,
-      variantId,
-      stock,
-    });
-  };
-
   // Lista de slugs de marcas válidos
   const brandSlugs = Object.keys(BRAND_CONFIGS);
 
@@ -3764,7 +3741,6 @@ const App = () => {
         <BrandProvider>
           <AuthProvider>
             <SearchProvider>
-              <CartContext.Provider value={{ cart, addToCart, removeFromCart, updateQuantity, clearCart, cartCount, isCartOpen, setIsCartOpen }}>
                 <ToastNotification />
                 <ScrollToTop />
                 <SEOHead />
@@ -3817,7 +3793,6 @@ const App = () => {
                 </div>
                 <Footer />
               </div>
-            </CartContext.Provider>
             </SearchProvider>
           </AuthProvider>
         </BrandProvider>
