@@ -314,7 +314,11 @@ export const useCartStore = create<CartState>()(
         if (error) {
           console.warn('[CartStore] Erro na rehydration:', error);
         }
-        useCartStore.setState({ _hasHydrated: true });
+        // queueMicrotask garante que useCartStore já foi atribuído
+        // quando o setState executar (roda após create() retornar)
+        queueMicrotask(() => {
+          useCartStore.setState({ _hasHydrated: true });
+        });
       },
     }
   )
