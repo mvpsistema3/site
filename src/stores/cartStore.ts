@@ -15,6 +15,7 @@ export interface CartItem {
 }
 
 interface CartState {
+  _hasHydrated: boolean;
   cart: CartItem[];
   isCartOpen: boolean;
   coupon: { code: string; discount: number } | null;
@@ -78,6 +79,7 @@ const cartStorage = {
 export const useCartStore = create<CartState>()(
   persist(
     (set, get) => ({
+      _hasHydrated: false,
       cart: [],
       isCartOpen: false,
       coupon: null,
@@ -289,7 +291,6 @@ export const useCartStore = create<CartState>()(
         cart: state.cart,
         coupon: state.coupon,
         shipping: state.shipping,
-        shippingCost: state.shippingCost,
       }),
       onRehydrateStorage: () => (state) => {
         if (state && state.cart.length > 0) {
@@ -299,6 +300,7 @@ export const useCartStore = create<CartState>()(
           const shippingCost = state.shipping ? parseFloat(state.shipping.ShippingPrice) : 0;
 
           useCartStore.setState({
+            _hasHydrated: true,
             cartSubtotal: subtotal,
             cartCount: state.cart.reduce((acc, i) => acc + i.quantity, 0),
             discountAmount: discount,
@@ -306,6 +308,8 @@ export const useCartStore = create<CartState>()(
             shippingCost,
             finalTotal: total + shippingCost,
           });
+        } else {
+          useCartStore.setState({ _hasHydrated: true });
         }
       },
     }

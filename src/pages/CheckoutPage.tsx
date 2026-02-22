@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, useCallback } from 'react';
+import { useEffect, useRef, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ArrowLeft } from 'lucide-react';
@@ -64,12 +64,7 @@ export function CheckoutPage() {
   const creditCardRef = useRef<CreditCardData | null>(null);
 
   // Wait for cart store hydration before checking cart emptiness
-  const [cartHydrated, setCartHydrated] = useState(useCartStore.persist.hasHydrated());
-  useEffect(() => {
-    if (cartHydrated) return;
-    const unsub = useCartStore.persist.onFinishHydration(() => setCartHydrated(true));
-    return unsub;
-  }, [cartHydrated]);
+  const cartHydrated = useCartStore((s) => s._hasHydrated);
 
   // Guard: redirect if cart is empty and no result (only after hydration)
   useEffect(() => {
@@ -133,10 +128,19 @@ export function CheckoutPage() {
     setSubmitError(null);
 
     try {
-      const response: PaymentResponse = await paymentMutation.mutateAsync({
-        formData,
-        creditCardData: creditCardRef.current || undefined,
-      });
+      // Timeout safety: abort if request takes longer than 90 seconds
+      const timeoutMs = 90_000;
+      const timeout = new Promise<never>((_, reject) =>
+        setTimeout(() => reject(new Error('O servidor demorou muito para responder. Por favor, tente novamente.')), timeoutMs)
+      );
+
+      const response: PaymentResponse = await Promise.race([
+        paymentMutation.mutateAsync({
+          formData,
+          creditCardData: creditCardRef.current || undefined,
+        }),
+        timeout,
+      ]);
 
       // Clear credit card data immediately
       creditCardRef.current = null;
@@ -161,6 +165,7 @@ export function CheckoutPage() {
       }
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Erro ao processar pagamento';
+      console.error('[Checkout] Submit failed:', err);
       setSubmitError(message);
       addToast(message, 'error');
     } finally {

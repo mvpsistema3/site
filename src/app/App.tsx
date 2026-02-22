@@ -1559,12 +1559,21 @@ const Footer = () => {
 // --- Cart Page ---
 
 const CartPage = () => {
+  const hasHydrated = useCartStore((s) => s._hasHydrated);
   const cart = useCartStore((s) => s.cart);
   const updateQuantity = useCartStore((s) => s.updateQuantity);
   const removeFromCart = useCartStore((s) => s.removeFromCart);
   const clearCart = useCartStore((s) => s.clearCart);
   const navigate = useBrandNavigate();
   const { primaryColor } = useBrandColors();
+
+  if (!hasHydrated) {
+    return (
+      <div className="flex items-center justify-center min-h-[40vh]">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-400" />
+      </div>
+    );
+  }
 
   // Usar cartStore para ter acesso ao shipping e cupons
   const {
