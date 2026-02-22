@@ -43,6 +43,12 @@
   background: #00B4BD;
 }
 
+/* position: relative no html para Framer Motion useScroll({ target })
+   calcular scroll offset corretamente (evita warning "non-static position") */
+html {
+  position: relative;
+}
+
 /* Base styles */
 body {
   font-family: 'Montserrat', sans-serif;
