@@ -292,36 +292,57 @@ export const useCartStore = create<CartState>()(
         coupon: state.coupon,
         shipping: state.shipping,
       }),
-      onRehydrateStorage: () => (state) => {
-        if (state && state.cart.length > 0) {
-          const subtotal = state.cart.reduce((acc, i) => acc + i.price * i.quantity, 0);
-          const discount = state.coupon?.discount || 0;
+      // merge: calcula campos derivados (cartCount, totais) no momento da merge,
+      // evitando render intermediário com cartCount: 0 enquanto cart já tem itens.
+      merge: (persistedState, currentState) => {
+        const merged = { ...currentState, ...(persistedState as Partial<CartState>) };
+        if (merged.cart && merged.cart.length > 0) {
+          const subtotal = merged.cart.reduce((acc: number, i: CartItem) => acc + i.price * i.quantity, 0);
+          const discount = merged.coupon?.discount || 0;
           const total = Math.max(0, subtotal - discount);
-          const shippingCost = state.shipping ? parseFloat(state.shipping.ShippingPrice) : 0;
-
-          useCartStore.setState({
-            _hasHydrated: true,
-            cartSubtotal: subtotal,
-            cartCount: state.cart.reduce((acc, i) => acc + i.quantity, 0),
-            discountAmount: discount,
-            cartTotal: total,
-            shippingCost,
-            finalTotal: total + shippingCost,
-          });
-        } else {
-          useCartStore.setState({ _hasHydrated: true });
+          const shippingCost = merged.shipping ? parseFloat(merged.shipping.ShippingPrice) : 0;
+          merged.cartCount = merged.cart.reduce((acc: number, i: CartItem) => acc + i.quantity, 0);
+          merged.cartSubtotal = subtotal;
+          merged.discountAmount = discount;
+          merged.cartTotal = total;
+          merged.shippingCost = shippingCost;
+          merged.finalTotal = total + shippingCost;
         }
+        return merged;
+      },
+      onRehydrateStorage: () => (_state: CartState | undefined, error?: unknown) => {
+        if (error) {
+          console.warn('[CartStore] Erro na rehydration:', error);
+        }
+        useCartStore.setState({ _hasHydrated: true });
       },
     }
   )
 );
 
-// Fallback: garante que _hasHydrated seja setado mesmo se onRehydrateStorage falhar
-if (useCartStore.persist.hasHydrated()) {
-  useCartStore.setState({ _hasHydrated: true });
+// Safety net: garantir que _hasHydrated seja true em no máximo 1 segundo
+// Cobre edge cases onde onRehydrateStorage não dispara (storage null, erro, etc.)
+const hydrateTimeout = setTimeout(() => {
+  if (!useCartStore.getState()._hasHydrated) {
+    console.warn('[CartStore] Hydration timeout — forçando _hasHydrated = true');
+    useCartStore.setState({ _hasHydrated: true });
+  }
+}, 1000);
+
+// Resolver mais rápido via onFinishHydration
+if (useCartStore.persist?.onFinishHydration) {
+  useCartStore.persist.onFinishHydration(() => {
+    clearTimeout(hydrateTimeout);
+    if (!useCartStore.getState()._hasHydrated) {
+      useCartStore.setState({ _hasHydrated: true });
+    }
+  });
 }
-useCartStore.persist.onFinishHydration(() => {
+
+// Se já hydratou sincronamente (raro mas possível)
+if (useCartStore.persist?.hasHydrated?.()) {
+  clearTimeout(hydrateTimeout);
   if (!useCartStore.getState()._hasHydrated) {
     useCartStore.setState({ _hasHydrated: true });
   }
-});
+}

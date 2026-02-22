@@ -1559,18 +1559,16 @@ const CartPage = () => {
   const navigate = useBrandNavigate();
   const { primaryColor } = useBrandColors();
 
-  // Usar cartStore para ter acesso ao shipping e cupons
-  const {
-    shipping,
-    shippingCost,
-    setShipping,
-    cartSubtotal,
-    finalTotal,
-    coupon,
-    discountAmount,
-    applyCoupon,
-    removeCoupon
-  } = useCartStore();
+  // Seletores individuais para evitar re-render em toda mudança do store
+  const shipping = useCartStore((s) => s.shipping);
+  const shippingCost = useCartStore((s) => s.shippingCost);
+  const setShipping = useCartStore((s) => s.setShipping);
+  const cartSubtotal = useCartStore((s) => s.cartSubtotal);
+  const finalTotal = useCartStore((s) => s.finalTotal);
+  const coupon = useCartStore((s) => s.coupon);
+  const discountAmount = useCartStore((s) => s.discountAmount);
+  const applyCoupon = useCartStore((s) => s.applyCoupon);
+  const removeCoupon = useCartStore((s) => s.removeCoupon);
 
   if (!hasHydrated) {
     return (
