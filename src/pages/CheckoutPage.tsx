@@ -36,7 +36,7 @@ export function CheckoutPage() {
   const { user } = useAuth();
   const { currentSlug } = useBrand();
   const { primaryColor } = useBrandColors();
-  const { cart, clearCart, finalTotal } = useCartStore();
+  const { cart, clearCart, finalTotal, coupon } = useCartStore();
   const addToast = useToastStore((s) => s.addToast);
   const paymentMutation = useAsaasPayment();
 
@@ -54,6 +54,7 @@ export function CheckoutPage() {
     setShippingSelection,
     setPaymentMethod,
     setInstallments,
+    setCouponCode,
     setSubmitting,
     setSubmitError,
     setResult,
@@ -63,16 +64,30 @@ export function CheckoutPage() {
   // Credit card data in ref only (never in global state)
   const creditCardRef = useRef<CreditCardData | null>(null);
 
+  // Marca que houve pagamento concluído — impede o guard de redirecionar para /cart
+  const paymentDoneRef = useRef(false);
+
   // Wait for cart store hydration before checking cart emptiness
   const cartHydrated = useCartStore((s) => s._hasHydrated);
 
   // Guard: redirect if cart is empty and no result (only after hydration)
   useEffect(() => {
     if (!cartHydrated) return;
+    if (paymentDoneRef.current) return;
     if (cart.length === 0 && !result) {
       navigate(`/${currentSlug}/cart`, { replace: true });
     }
   }, [cartHydrated, cart.length, result, navigate, currentSlug]);
+
+  // Sincronizar cupom do cartStore → checkoutStore
+  // (cupom aplicado na página do carrinho precisa chegar no formData do checkout)
+  useEffect(() => {
+    if (coupon?.code && formData.couponCode !== coupon.code) {
+      setCouponCode(coupon.code);
+    } else if (!coupon && formData.couponCode) {
+      setCouponCode(null);
+    }
+  }, [coupon, formData.couponCode, setCouponCode]);
 
   // Scroll to top on step change
   useEffect(() => {
@@ -145,7 +160,9 @@ export function CheckoutPage() {
       // Clear credit card data immediately
       creditCardRef.current = null;
 
-      if ('pix' in response) {
+      // Verifica se é resposta PIX: 'in' checa apenas existência da chave,
+      // mas a API pode retornar pix: null em pagamentos com cartão
+      if ('pix' in response && response.pix != null) {
         const pixResponse = response as PaymentPixResponse;
         setResult({
           type: 'pix',
@@ -299,6 +316,7 @@ export function CheckoutPage() {
       onPaymentConfirmed={() => clearCart()}
       onNavigateToOrder={() => {
         const orderId = result?.orderId;
+        paymentDoneRef.current = true;
         resetCheckout();
         navigate(user
           ? `/${currentSlug}/orders`
@@ -306,6 +324,7 @@ export function CheckoutPage() {
         );
       }}
       onContinueShopping={() => {
+        paymentDoneRef.current = true;
         resetCheckout();
         navigate(`/${currentSlug}/shop`);
       }}

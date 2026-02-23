@@ -48,7 +48,7 @@ export const BrandProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
   // Fonte primária: cache ou config local. NUNCA espera o DB para renderizar.
   const [brand, setBrand] = useState<Brand | null>(cachedBrand);
-  const [isLoading, setIsLoading] = useState(false); // Nunca bloqueia — sempre tem brandConfig
+  const [isLoading, setIsLoading] = useState(!cachedBrand); // true se não tem cache
   const [error, setError] = useState<Error | null>(null);
   const [currentSlug, setCurrentSlug] = useState(initialSlug);
   const loadIdRef = useRef(0);
@@ -77,28 +77,17 @@ export const BrandProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   const loadBrand = useCallback(async (slug: string) => {
     const loadId = ++loadIdRef.current;
 
-    // 1. Fonte imediata: cache ou config local — NUNCA bloqueia renderização
     const cached = getCachedBrand(slug);
     if (cached) {
+      // Cache existe — usar imediatamente, sem loading
       setBrand(cached);
+      setCurrentSlug(slug);
+      setIsLoading(false);
     } else {
-      // Sem cache → usa config local como brand temporário (tem id vazio)
-      const config = getBrandConfig(slug);
-      setBrand({
-        id: '',
-        slug: config.slug,
-        name: config.name,
-        domain: config.domain,
-        theme: config.theme,
-        features: config.features,
-        settings: config.settings,
-        active: true,
-      });
+      // Sem cache — manter loading enquanto busca do banco
+      setIsLoading(true);
     }
-    setCurrentSlug(slug);
-    setIsLoading(false);
 
-    // 2. Atualização em background do DB (não bloqueia UI)
     try {
       const data = await fetchBrandFromDB(slug);
       if (loadId !== loadIdRef.current) return;
@@ -107,10 +96,43 @@ export const BrandProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       setCurrentSlug(slug);
       setError(null);
       setCachedBrand(slug, data);
+      setIsLoading(false);
     } catch {
       if (loadId !== loadIdRef.current) return;
-      // Query falhou — mantém o que já tem (cache ou config local)
       console.warn(`[BrandContext] DB update falhou para "${slug}", usando dados locais.`);
+
+      // Se não tinha cache E o fetch falhou, usar config local como fallback
+      if (!cached) {
+        const config = getBrandConfig(slug);
+        setBrand({
+          id: '',
+          slug: config.slug,
+          name: config.name,
+          domain: config.domain,
+          theme: config.theme,
+          features: config.features,
+          settings: config.settings,
+          active: true,
+        });
+        setCurrentSlug(slug);
+      }
+      setIsLoading(false);
+
+      // Retry após 3 segundos (uma tentativa)
+      setTimeout(() => {
+        if (loadIdRef.current === loadId) {
+          fetchBrandFromDB(slug)
+            .then((data) => {
+              setBrand(data);
+              setCurrentSlug(slug);
+              setError(null);
+              setCachedBrand(slug, data);
+            })
+            .catch(() => {
+              console.warn(`[BrandContext] Retry também falhou para "${slug}".`);
+            });
+        }
+      }, 3000);
     }
   }, [fetchBrandFromDB]);
 

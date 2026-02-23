@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { X } from 'lucide-react';
 import { useBrand } from '../contexts/BrandContext';
 import { useQuery } from '@tanstack/react-query';
-import { supabase } from '../lib/supabase';
+import { supabasePublic } from '../lib/supabase';
 
 const PROMO_SEEN_KEY = 'promo_popup_seen_date';
 
@@ -24,7 +24,7 @@ function useActivePromo() {
     queryFn: async () => {
       if (!brand?.id) return null;
 
-      const { data, error } = await supabase
+      const { data, error } = await supabasePublic
         .from('promos')
         .select('id, title, description, image, coupon_code, cta_text, cta_link')
         .eq('brand_id', brand.id)

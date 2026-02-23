@@ -156,44 +156,51 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   }, [fetchProfile, fetchCustomerBrands]);
 
-  // Verificar sessão existente ao carregar
+  // Inicializar autenticação via onAuthStateChange
+  //
+  // CRITICAL: O callback do onAuthStateChange NÃO pode ser async/await com
+  // chamadas ao supabase client. Motivo: durante a inicialização, o supabase-js
+  // chama _notifyAllSubscribers('SIGNED_IN', session) de DENTRO do initializePromise.
+  // Se o callback await updateUserState (que faz supabase.from()... → getSession()
+  // → await initializePromise), cria-se um DEADLOCK circular:
+  //   initializePromise → _notifyAllSubscribers → callback → getSession() → initializePromise
+  //
+  // Solução: usar fire-and-forget no callback. O evento INITIAL_SESSION é emitido
+  // APÓS initializePromise resolver, então o updateUserState consegue executar
+  // sem deadlock.
   useEffect(() => {
-    const initializeAuth = async () => {
-      try {
-        // getSession() retorna do localStorage sem validar o token com o servidor.
-        // Usamos getUser() para validar que o token ainda é válido.
-        const { data: { session: currentSession } } = await supabase.auth.getSession();
+    let mounted = true;
+    let hasInitialized = false;
 
-        if (currentSession) {
-          // Valida o token com o servidor — se expirado/inválido, limpa a sessão
-          const { data: { user: validatedUser }, error: userError } = await supabase.auth.getUser();
-          if (userError || !validatedUser) {
-            // Token inválido — forçar logout local
-            await supabase.auth.signOut({ scope: 'local' });
-            await updateUserState(null);
-            return;
-          }
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(
+      (_event, session) => {
+        if (!mounted) return;
+
+        if (_event === 'INITIAL_SESSION') {
+          // INITIAL_SESSION dispara APÓS initializePromise resolver.
+          // Seguro para fazer chamadas ao supabase client.
+          hasInitialized = true;
+          updateUserState(session).catch(err => {
+            console.error('Erro ao inicializar sessão:', err);
+            setLoading(false);
+          });
+          return;
         }
 
-        await updateUserState(currentSession);
-      } catch (error) {
-        console.error('Erro ao inicializar autenticação:', error);
-        setLoading(false);
-      }
-    };
+        // SIGNED_IN e TOKEN_REFRESHED durante init disparam DENTRO do initializePromise.
+        // Ignorar — INITIAL_SESSION vai cuidar da inicialização completa.
+        if (!hasInitialized) return;
 
-    initializeAuth();
-
-    // Listener de mudanças de auth
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
-      try {
-        await updateUserState(session);
-      } catch (error) {
-        console.error('Erro no listener de autenticação:', error);
+        // Após init: eventos de login/logout/refresh normais.
+        // Usar fire-and-forget para evitar bloquear _notifyAllSubscribers.
+        updateUserState(session).catch(err => {
+          console.error('Erro no listener de autenticação:', err);
+        });
       }
-    });
+    );
 
     return () => {
+      mounted = false;
       subscription.unsubscribe();
     };
   }, [updateUserState]);

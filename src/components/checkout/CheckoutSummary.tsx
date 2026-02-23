@@ -21,15 +21,19 @@ export function CheckoutSummary() {
     shipping,
   } = useCartStore();
   const { setCouponCode } = useCheckoutStore();
+  const applyCoupon = useCartStore((s) => s.applyCoupon);
+  const removeCoupon = useCartStore((s) => s.removeCoupon);
 
   const [mobileOpen, setMobileOpen] = useState(false);
 
   const handleCouponApplied = (discount: number, couponCode: string) => {
     setCouponCode(couponCode);
+    applyCoupon(couponCode, discount);
   };
 
   const handleCouponRemoved = () => {
     setCouponCode(null);
+    removeCoupon();
   };
 
   return (

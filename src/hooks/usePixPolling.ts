@@ -85,13 +85,12 @@ export function usePixPolling({
 
     const interval = setInterval(async () => {
       try {
-        const { data } = await supabase
-          .from('orders')
-          .select('payment_status')
-          .eq('id', orderId)
-          .single();
+        // Usa RPC SECURITY DEFINER para funcionar mesmo sem sessão autenticada
+        const { data } = await supabase.rpc('check_order_payment_status', {
+          p_order_id: orderId,
+        });
 
-        if (data && (data.payment_status === 'confirmed' || data.payment_status === 'received')) {
+        if (data === 'confirmed' || data === 'received') {
           handleConfirmed();
         }
       } catch {

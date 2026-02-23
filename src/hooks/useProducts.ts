@@ -1,5 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { supabase, type Product } from '../lib/supabase';
+import { supabasePublic, type Product } from '../lib/supabase';
 import { useBrand } from '../contexts/BrandContext';
 
 /**
@@ -14,7 +14,7 @@ export function useProducts() {
     queryFn: async () => {
       if (!brand?.id) return [];
 
-      const { data, error } = await supabase
+      const { data, error } = await supabasePublic
         .from('products')
         .select(`
           *,
@@ -47,7 +47,7 @@ export function useProduct(id: string) {
     queryFn: async () => {
       if (!id) return null;
 
-      let query = supabase
+      let query = supabasePublic
         .from('products')
         .select(`
           *,
@@ -86,7 +86,7 @@ export function useProductsByCategorySlug(categorySlug: string) {
       if (!brand?.id || !categorySlug) return [];
 
       // Buscar a categoria pelo slug
-      const { data: category, error: categoryError } = await supabase
+      const { data: category, error: categoryError } = await supabasePublic
         .from('categories')
         .select('id, parent_id')
         .eq('slug', categorySlug)
@@ -98,7 +98,7 @@ export function useProductsByCategorySlug(categorySlug: string) {
       if (categoryError || !category) return [];
 
       // Buscar subcategorias filhas (se a categoria for pai)
-      const { data: subcategories } = await supabase
+      const { data: subcategories } = await supabasePublic
         .from('categories')
         .select('id')
         .eq('parent_id', category.id)
@@ -113,7 +113,7 @@ export function useProductsByCategorySlug(categorySlug: string) {
       ];
 
       // Buscar produtos de todas as categorias (pai + filhos)
-      const { data, error } = await supabase
+      const { data, error } = await supabasePublic
         .from('category_products')
         .select(`
           position,
@@ -161,7 +161,7 @@ export function useProductsByCategory(category: string) {
     queryFn: async () => {
       if (!brand?.id) return [];
 
-      const { data, error } = await supabase
+      const { data, error } = await supabasePublic
         .from('products')
         .select('*')
         .eq('category', category)
@@ -188,7 +188,7 @@ export function useFeaturedProducts() {
     queryFn: async () => {
       if (!brand?.id) return [];
 
-      const { data, error } = await supabase
+      const { data, error } = await supabasePublic
         .from('products')
         .select(`
           *,
@@ -219,7 +219,7 @@ export function useProductSuggestions(productId: string) {
     queryFn: async () => {
       if (!productId) return [];
 
-      const { data, error } = await supabase
+      const { data, error } = await supabasePublic
         .from('product_suggestions')
         .select(`
           position,
@@ -255,7 +255,7 @@ export function useSearchProducts(query: string) {
     queryFn: async () => {
       if (!brand?.id) return [];
 
-      const { data, error } = await supabase
+      const { data, error } = await supabasePublic
         .from('products')
         .select('*')
         .or(`name.ilike.%${query}%,description.ilike.%${query}%`)

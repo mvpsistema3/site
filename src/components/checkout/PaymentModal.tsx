@@ -59,7 +59,7 @@ export function PaymentModal({
     enabled: !!pixResult && phase === 'pix_waiting',
     onPaymentConfirmed: handlePixConfirmed,
     onExpired: handlePixExpired,
-    expirationDate: pixResult?.pix.expiration,
+    expirationDate: pixResult?.pix?.expiration,
   });
 
   // Body scroll lock
@@ -72,7 +72,7 @@ export function PaymentModal({
 
   // Copy PIX code
   const handleCopy = async () => {
-    if (!pixResult) return;
+    if (!pixResult?.pix) return;
     try {
       await navigator.clipboard.writeText(pixResult.pix.payload);
       setCopied(true);
@@ -134,7 +134,8 @@ export function PaymentModal({
             </button>
           )}
 
-          {phase === 'pix_waiting' && (
+          {/* Guarda defensiva: só renderiza PIX se pix não for null */}
+          {phase === 'pix_waiting' && pixResult?.pix && (
             <PixWaitingContent
               orderNumber={orderNumber}
               qrCode={pixResult!.pix.qr_code}

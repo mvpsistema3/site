@@ -5,11 +5,11 @@ import { useBrandColors } from '../hooks/useTheme';
 import { motion, AnimatePresence } from 'framer-motion';
 
 export function FreeShippingBanner() {
-  const { brandConfig } = useBrand();
+  const { brand } = useBrand();
   const { primaryColor } = useBrandColors();
   const [isVisible, setIsVisible] = useState(true);
 
-  const threshold = brandConfig?.settings?.freeShippingThreshold || 0;
+  const threshold = brand?.settings?.freeShippingThreshold || 0;
 
   if (!threshold || !isVisible) {
     return null;

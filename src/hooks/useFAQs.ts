@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
-import { supabase } from '../lib/supabase';
+import { supabasePublic } from '../lib/supabase';
 import { useBrand } from '../contexts/BrandContext';
 
 export interface FAQ {
@@ -22,7 +22,7 @@ export function useFAQs() {
     queryFn: async () => {
       if (!brand?.id) return [];
 
-      const { data, error } = await supabase
+      const { data, error } = await supabasePublic
         .from('store_faqs')
         .select('*')
         .eq('brand_id', brand.id)
@@ -49,7 +49,7 @@ export function useFAQsByCategory(category: string) {
     queryFn: async () => {
       if (!brand?.id) return [];
 
-      const { data, error } = await supabase
+      const { data, error } = await supabasePublic
         .from('store_faqs')
         .select('*')
         .eq('brand_id', brand.id)
@@ -76,7 +76,7 @@ export function useFAQCategories() {
     queryFn: async () => {
       if (!brand?.id) return [];
 
-      const { data, error } = await supabase
+      const { data, error } = await supabasePublic
         .from('store_faqs')
         .select('*')
         .eq('brand_id', brand.id)

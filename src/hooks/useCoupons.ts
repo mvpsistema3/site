@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useQuery, useMutation } from '@tanstack/react-query';
-import { supabase } from '../lib/supabase';
+import { supabase, supabasePublic } from '../lib/supabase';
 import { useBrand } from '../contexts/BrandContext';
 import { Coupon, CouponValidationResult } from '../types/coupon';
 
@@ -13,7 +13,7 @@ export function useCoupons() {
     queryFn: async () => {
       if (!brand?.id) return [];
 
-      const { data, error } = await supabase
+      const { data, error } = await supabasePublic
         .from('coupons')
         .select('*')
         .eq('brand_id', brand.id)
@@ -42,7 +42,7 @@ export function useValidateCoupon() {
 
     try {
       // Buscar cupom no banco
-      const { data: coupon, error } = await supabase
+      const { data: coupon, error } = await supabasePublic
         .from('coupons')
         .select('*')
         .eq('code', code.toUpperCase())

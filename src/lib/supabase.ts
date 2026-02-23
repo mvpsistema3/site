@@ -10,6 +10,19 @@ if (!supabaseUrl || !supabaseAnonKey) {
 
 export const supabase = createClient(supabaseUrl, supabaseAnonKey);
 
+// Client público — NUNCA injeta JWT do usuário.
+// Usar para queries de dados públicos (products, banners, categories, etc.)
+// Motivo: o client autenticado injeta o JWT em toda request.
+// Se o JWT estiver expirado (ex: hard refresh), o Supabase retorna 401
+// ANTES de checar RLS, mesmo que a tabela permita acesso público.
+export const supabasePublic = createClient(supabaseUrl, supabaseAnonKey, {
+  auth: {
+    persistSession: false,
+    autoRefreshToken: false,
+    detectSessionInUrl: false,
+  },
+});
+
 // Credenciais expostas para queries públicas via fetch direto (sem JWT)
 export { supabaseUrl, supabaseAnonKey };
 

@@ -12,10 +12,10 @@ interface FreeShippingProgressProps {
  * Calcula: threshold - subtotal = remaining
  */
 export function FreeShippingProgress({ cartSubtotal }: FreeShippingProgressProps) {
-  const { brandConfig } = useBrand();
+  const { brand } = useBrand();
   const { primaryColor } = useBrandColors();
 
-  const threshold = brandConfig.settings.freeShippingThreshold || 0;
+  const threshold = brand?.settings?.freeShippingThreshold || 0;
 
   // Não mostra se não tiver frete grátis configurado
   if (!threshold) {

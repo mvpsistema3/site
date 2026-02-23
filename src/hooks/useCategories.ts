@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
-import { supabase } from '../lib/supabase';
+import { supabasePublic } from '../lib/supabase';
 import { useBrand } from '../contexts/BrandContext';
 
 export interface Category {
@@ -64,7 +64,7 @@ export function useCategories() {
     queryFn: async () => {
       if (!brand?.id) return [];
 
-      const { data, error } = await supabase
+      const { data, error } = await supabasePublic
         .from('categories')
         .select('*')
         .is('deleted_at', null)
@@ -93,7 +93,7 @@ export function useCategoryTree() {
     queryFn: async () => {
       if (!brand?.id) return [];
 
-      const { data, error } = await supabase
+      const { data, error } = await supabasePublic
         .from('categories')
         .select('*')
         .is('deleted_at', null)
@@ -122,7 +122,7 @@ export function useMenuCategories() {
     queryFn: async () => {
       if (!brand?.id) return [];
 
-      const { data, error } = await supabase
+      const { data, error } = await supabasePublic
         .from('categories')
         .select('*')
         .is('deleted_at', null)
@@ -151,7 +151,7 @@ export function useFeaturedCategories() {
     queryFn: async () => {
       if (!brand?.id) return [];
 
-      const { data, error } = await supabase
+      const { data, error } = await supabasePublic
         .from('categories')
         .select('*')
         .is('deleted_at', null)
@@ -181,7 +181,7 @@ export function useCategory(categorySlug: string) {
     queryFn: async () => {
       if (!brand?.id) return null;
 
-      const { data, error } = await supabase
+      const { data, error } = await supabasePublic
         .from('categories')
         .select(`
           *,
@@ -220,7 +220,7 @@ export function useSubcategories(parentId: string | null) {
     queryFn: async () => {
       if (!brand?.id) return [];
 
-      let query = supabase
+      let query = supabasePublic
         .from('categories')
         .select('*')
         .is('deleted_at', null)
@@ -258,7 +258,7 @@ export function useTabacariaCategories() {
       if (!brand?.id) return [];
 
       // !inner garante que só retorna categorias que têm ao menos 1 produto em category_products
-      const { data, error } = await supabase
+      const { data, error } = await supabasePublic
         .from('categories')
         .select('*, category_products!inner(product_id)')
         .is('deleted_at', null)

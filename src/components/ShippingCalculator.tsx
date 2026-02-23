@@ -19,7 +19,7 @@ export function ShippingCalculator({
 }: ShippingCalculatorProps) {
   const [cep, setCep] = useState('');
   const [touched, setTouched] = useState(false);
-  const { brandConfig } = useBrand();
+  const { brand } = useBrand();
 
   const {
     options,
@@ -33,7 +33,7 @@ export function ShippingCalculator({
   } = useShipping();
 
   // Verifica se atinge o threshold de frete grátis
-  const freeShippingThreshold = brandConfig?.settings?.freeShippingThreshold || 0;
+  const freeShippingThreshold = brand?.settings?.freeShippingThreshold || 0;
   const isFreeShipping = freeShippingThreshold > 0 && cartTotal >= freeShippingThreshold;
 
   // Aplica frete grátis nas opções se atingir o threshold

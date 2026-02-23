@@ -881,7 +881,7 @@ const Header = () => {
                     src={logoUrl}
                     alt={brandName}
                     className="transition-all duration-300"
-                    style={{ height: isScrolled ? '32px' : '36px' }}
+                    style={{ height: isScrolled ? '48px' : '56px' }}
                   />
                 ) : (
                   <span
@@ -1797,14 +1797,6 @@ const CartPage = () => {
                   />
                 </div>
 
-                {/* Discount Applied */}
-                {coupon && discountAmount > 0 && (
-                  <div className="flex justify-between items-center text-green-600 bg-green-50 px-4 py-3 rounded-lg">
-                    <span className="text-sm font-medium">Desconto ({coupon.code})</span>
-                    <span className="font-bold">- R$ {discountAmount.toFixed(2)}</span>
-                  </div>
-                )}
-
                 {/* Total */}
                 <div className="border-t-2 border-gray-900 pt-6">
                   <div className="flex justify-between items-center mb-1">
@@ -2062,7 +2054,7 @@ const HomePage = () => {
               ? [{ text: `FRETE GRÁTIS ACIMA DE R$${brand.settings.freeShippingThreshold}`, icon: "truck" as const }]
               : []),
             ...(brand?.features?.installments && brand?.settings?.maxInstallments > 1
-              ? [{ text: `PARCELE EM ATÉ ${brand.settings.maxInstallments}X SEM JUROS`, icon: "credit-card" as const }]
+              ? [{ text: `PARCELE EM ATÉ ${brand.settings.maxInstallments} VEZES`, icon: "credit-card" as const }]
               : []),
           ]}
           bgColor="#B91C1C"

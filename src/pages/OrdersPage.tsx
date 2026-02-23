@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   ShoppingBag, Package, Truck, CheckCircle2, XCircle, Clock,
-  ChevronDown, ChevronUp, ExternalLink, Copy, CreditCard, MapPin,
+  ChevronDown, ChevronUp, ExternalLink, Copy,
 } from 'lucide-react';
 import { useBrandColors } from '../hooks/useTheme';
 import { useMyOrders, ORDER_STATUS_CONFIG, type OrderWithItems } from '../hooks/useOrders';
@@ -37,14 +37,15 @@ function formatDateFull(iso: string | null) {
 
 const STATUS_ICONS: Record<string, React.ReactNode> = {
   pending: <Clock size={14} />,
-  paid: <CreditCard size={14} />,
   processing: <Package size={14} />,
+  separated: <CheckCircle2 size={14} />,
   shipped: <Truck size={14} />,
   delivered: <CheckCircle2 size={14} />,
   cancelled: <XCircle size={14} />,
+  refunded: <XCircle size={14} />,
 };
 
-const STATUS_FLOW = ['pending', 'paid', 'processing', 'shipped', 'delivered'];
+const STATUS_FLOW = ['pending', 'processing', 'separated', 'shipped', 'delivered'];
 
 function getPaymentLabel(method: string | null) {
   if (!method) return 'Não informado';
@@ -321,10 +322,12 @@ function OrderCard({ order, primaryColor }: { order: OrderWithItems; primaryColo
 const FILTERS = [
   { key: 'all', label: 'Todos' },
   { key: 'pending', label: 'Pendentes' },
-  { key: 'paid', label: 'Pagos' },
+  { key: 'processing', label: 'Preparando' },
+  { key: 'separated', label: 'Separados' },
   { key: 'shipped', label: 'Enviados' },
   { key: 'delivered', label: 'Entregues' },
   { key: 'cancelled', label: 'Cancelados' },
+  { key: 'refunded', label: 'Reembolsados' },
 ];
 
 // ─── Main Page ──────────────────────────────────────────

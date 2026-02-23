@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Tag, Check, X, Loader2 } from 'lucide-react';
 import { useValidateCoupon } from '../hooks/useCoupons';
+import { useCartStore } from '../stores/cartStore';
 
 interface CouponInputProps {
   cartTotal: number;
@@ -9,10 +10,17 @@ interface CouponInputProps {
 }
 
 export function CouponInput({ cartTotal, onCouponApplied, onCouponRemoved }: CouponInputProps) {
-  const [code, setCode] = useState('');
+  const appliedCoupon = useCartStore((s) => s.coupon);
+  const [code, setCode] = useState(appliedCoupon?.code || '');
   const [isValidating, setIsValidating] = useState(false);
   const { validateCoupon, validationResult, clearCoupon } = useValidateCoupon();
   const [error, setError] = useState<string | null>(null);
+
+  // Cupom está ativo se acabou de ser validado OU se já existia no cartStore
+  const isApplied = !!(validationResult?.valid || appliedCoupon);
+  const displayCode = validationResult?.valid ? code.toUpperCase() : (appliedCoupon?.code || '');
+  const displayDiscount = validationResult?.discount || appliedCoupon?.discount || 0;
+  const displayDescription = validationResult?.coupon?.description || null;
 
   const handleApplyCoupon = async () => {
     if (!code.trim()) {
@@ -70,20 +78,20 @@ export function CouponInput({ cartTotal, onCouponApplied, onCouponRemoved }: Cou
         <div className="relative flex-1">
           <input
             type="text"
-            value={code}
+            value={isApplied ? displayCode : code}
             onChange={(e) => setCode(e.target.value.toUpperCase())}
             placeholder="Digite seu cupom"
             className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-sesh-cyan/20 focus:border-sesh-cyan uppercase text-sm font-bold tracking-widest transition-all duration-200 disabled:bg-gray-50 disabled:text-gray-500"
-            disabled={!!validationResult?.valid || isValidating}
+            disabled={isApplied || isValidating}
             onKeyPress={(e) => {
-              if (e.key === 'Enter' && !validationResult?.valid) {
+              if (e.key === 'Enter' && !isApplied) {
                 handleApplyCoupon();
               }
             }}
           />
         </div>
 
-        {!validationResult?.valid ? (
+        {!isApplied ? (
           <button
             onClick={handleApplyCoupon}
             disabled={isValidating || !code.trim()}
@@ -118,7 +126,7 @@ export function CouponInput({ cartTotal, onCouponApplied, onCouponRemoved }: Cou
       )}
 
       {/* Mensagem de sucesso */}
-      {validationResult?.valid && (
+      {isApplied && (
         <div className="bg-gradient-to-r from-green-50 to-emerald-50 border border-green-300 rounded-xl p-4 shadow-sm">
           <div className="flex items-start gap-3">
             <div className="p-2 bg-green-100 rounded-lg">
@@ -129,12 +137,12 @@ export function CouponInput({ cartTotal, onCouponApplied, onCouponRemoved }: Cou
                 Cupom aplicado!
               </p>
               <p className="text-green-700 text-sm mb-2 leading-relaxed">
-                {validationResult.coupon?.description || `Código: ${code.toUpperCase()}`}
+                {displayDescription || `Código: ${displayCode}`}
               </p>
               <div className="flex items-center gap-2">
                 <span className="text-xs text-green-700">Você economizou:</span>
                 <span className="text-green-800 font-bold text-lg">
-                  {formatCurrency(validationResult.discount || 0)}
+                  {formatCurrency(displayDiscount)}
                 </span>
               </div>
             </div>

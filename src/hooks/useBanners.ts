@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
-import { supabase } from '../lib/supabase';
+import { supabasePublic } from '../lib/supabase';
 import { useBrand } from '../contexts/BrandContext';
 
 export interface Banner {
@@ -28,7 +28,7 @@ export function useBanners() {
     queryFn: async () => {
       if (!brand?.id) return [];
 
-      const { data, error } = await supabase
+      const { data, error } = await supabasePublic
         .from('banners')
         .select('*')
         .is('deleted_at', null)
@@ -56,7 +56,7 @@ export function useHeroBanner() {
     queryFn: async () => {
       if (!brand?.id) return null;
 
-      const { data, error } = await supabase
+      const { data, error } = await supabasePublic
         .from('banners')
         .select('*')
         .is('deleted_at', null)

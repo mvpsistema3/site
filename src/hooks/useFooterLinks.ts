@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
-import { supabase } from '../lib/supabase';
+import { supabasePublic } from '../lib/supabase';
 import { useBrand } from '../contexts/BrandContext';
 
 export interface FooterLink {
@@ -23,7 +23,7 @@ export function useFooterLinks() {
     queryFn: async () => {
       if (!brand?.id) return [];
 
-      const { data, error } = await supabase
+      const { data, error } = await supabasePublic
         .from('footer_links')
         .select('id, group_name, label, url, icon, is_external, position')
         .eq('brand_id', brand.id)

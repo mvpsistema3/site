@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
-import { supabase } from '../lib/supabase';
+import { supabasePublic } from '../lib/supabase';
 import { useBrand } from '../contexts/BrandContext';
 
 export interface Collection {
@@ -34,7 +34,7 @@ export function useHeroCollection() {
 
       const now = new Date().toISOString();
 
-      const { data, error } = await supabase
+      const { data, error } = await supabasePublic
         .from('collections')
         .select('*')
         .is('deleted_at', null)
@@ -66,7 +66,7 @@ export function useActiveCollections() {
 
       const now = new Date().toISOString();
 
-      const { data, error } = await supabase
+      const { data, error } = await supabasePublic
         .from('collections')
         .select('*')
         .is('deleted_at', null)
@@ -97,7 +97,7 @@ export function useProductsByCollectionSlug(collectionSlug: string) {
       if (!brand?.id || !collectionSlug) return [];
 
       // Buscar a coleção pelo slug
-      const { data: collection, error: collectionError } = await supabase
+      const { data: collection, error: collectionError } = await supabasePublic
         .from('collections')
         .select('id')
         .eq('slug', collectionSlug)
@@ -109,7 +109,7 @@ export function useProductsByCollectionSlug(collectionSlug: string) {
       if (collectionError || !collection) return [];
 
       // Buscar produtos da coleção via junction table
-      const { data, error } = await supabase
+      const { data, error } = await supabasePublic
         .from('product_collections')
         .select(`
           position,

@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
-import { supabase } from '../lib/supabase';
+import { supabasePublic } from '../lib/supabase';
 import { useBrand } from '../contexts/BrandContext';
 
 export interface StaticPage {
@@ -23,7 +23,7 @@ export function useStaticPage(slug: string) {
     queryFn: async () => {
       if (!brand?.id || !slug) return null;
 
-      const { data, error } = await supabase
+      const { data, error } = await supabasePublic
         .from('static_pages')
         .select('id, slug, title, content, meta_title, meta_description, position')
         .eq('brand_id', brand.id)
@@ -51,7 +51,7 @@ export function useStaticPages() {
     queryFn: async () => {
       if (!brand?.id) return [];
 
-      const { data, error } = await supabase
+      const { data, error } = await supabasePublic
         .from('static_pages')
         .select('id, slug, title, meta_title, meta_description, position')
         .eq('brand_id', brand.id)

@@ -16,9 +16,15 @@ interface ShippingMethodSelectorProps {
 
 export function ShippingMethodSelector({ cep, onShippingReady }: ShippingMethodSelectorProps) {
   const { primaryColor } = useBrandColors();
-  const { brandConfig } = useBrand();
-  const cartSubtotal = useCartStore((s) => s.cartSubtotal);
+  const { brand } = useBrand();
+  const cart = useCartStore((s) => s.cart);
+  const storedSubtotal = useCartStore((s) => s.cartSubtotal);
   const cartSetShipping = useCartStore((s) => s.setShipping);
+
+  // Fallback: recalculate from cart items if stored subtotal is stale (e.g. after rehydration)
+  const cartSubtotal = storedSubtotal > 0
+    ? storedSubtotal
+    : cart.reduce((acc, i) => acc + i.price * i.quantity, 0);
 
   const {
     options,
@@ -29,7 +35,7 @@ export function ShippingMethodSelector({ cep, onShippingReady }: ShippingMethodS
     selectService,
   } = useShipping();
 
-  const freeShippingThreshold = brandConfig?.settings?.freeShippingThreshold || 0;
+  const freeShippingThreshold = brand?.settings?.freeShippingThreshold || 0;
   const qualifiesForFreeShipping = freeShippingThreshold > 0 && cartSubtotal >= freeShippingThreshold;
 
   // Calculate shipping when CEP is provided
@@ -42,9 +48,15 @@ export function ShippingMethodSelector({ cep, onShippingReady }: ShippingMethodS
 
   const handleSelect = (service: FrenetShippingService) => {
     selectService(service);
-    cartSetShipping(service);
 
     const cost = qualifiesForFreeShipping ? 0 : parseFloat(service.ShippingPrice) || 0;
+
+    // Atualiza cart store com o custo efetivo (0 quando frete grátis)
+    const effectiveService = qualifiesForFreeShipping
+      ? { ...service, ShippingPrice: '0' }
+      : service;
+    cartSetShipping(effectiveService);
+
     onShippingReady({
       service_name: service.ServiceDescription || service.Carrier,
       cost,

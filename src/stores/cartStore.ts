@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import type { FrenetShippingService } from '../types/shipping.types';
+import { useToastStore } from './toastStore';
 
 export interface CartItem {
   id: string;
@@ -103,8 +104,10 @@ export const useCartStore = create<CartState>()(
             const totalQty = currentQty + item.quantity;
 
             if (totalQty > item.stock) {
-              console.warn(`Estoque insuficiente. Disponível: ${item.stock}, Solicitado: ${totalQty}`);
-              // Não adiciona se exceder o estoque
+              useToastStore.getState().addToast(
+                `Estoque insuficiente. Máximo disponível: ${item.stock} unidade(s)`,
+                'error'
+              );
               return state;
             }
           }
@@ -158,17 +161,25 @@ export const useCartStore = create<CartState>()(
       },
 
       updateQuantity: (id, size, color, delta) => {
+        // Validação de estoque antes do set para poder mostrar toast
+        const currentItem = get().cart.find(
+          (i) => i.id === id && i.selectedSize === size && i.selectedColor === color
+        );
+        if (currentItem && currentItem.stock !== undefined) {
+          const newQty = Math.max(1, currentItem.quantity + delta);
+          if (newQty > currentItem.stock) {
+            useToastStore.getState().addToast(
+              `Estoque insuficiente. Máximo disponível: ${currentItem.stock} unidade(s)`,
+              'error'
+            );
+            return;
+          }
+        }
+
         set((state) => {
           const newCart = state.cart.map((item) => {
             if (item.id === id && item.selectedSize === size && item.selectedColor === color) {
               const newQty = Math.max(1, item.quantity + delta);
-
-              // Validação de estoque
-              if (item.stock !== undefined && newQty > item.stock) {
-                console.warn(`Estoque insuficiente. Disponível: ${item.stock}`);
-                return item; // Não atualiza se exceder estoque
-              }
-
               return { ...item, quantity: newQty };
             }
             return item;
