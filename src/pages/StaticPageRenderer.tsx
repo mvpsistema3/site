@@ -1,6 +1,7 @@
 import React from 'react';
 import { useParams } from 'react-router-dom';
 import { FileText } from 'lucide-react';
+import DOMPurify from 'dompurify';
 import { useStaticPage } from '../hooks/useStaticPages';
 import { useBrandColors } from '../hooks/useTheme';
 import { useBrand } from '../contexts/BrandContext';
@@ -120,7 +121,7 @@ export function StaticPageRenderer() {
             [&_strong]:font-bold
             [&_a]:underline [&_a]:decoration-1 [&_a]:underline-offset-2
             [&_img]:rounded-lg [&_img]:shadow-lg"
-          dangerouslySetInnerHTML={{ __html: page.content }}
+          dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(page.content) }}
         />
       </div>
     </div>

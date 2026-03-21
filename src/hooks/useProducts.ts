@@ -63,7 +63,7 @@ export function useProduct(id: string) {
         query = query.eq('brand_id', brand.id);
       }
 
-      const { data, error } = await query.single();
+      const { data, error } = await query.maybeSingle();
 
       if (error) throw error;
       return data;

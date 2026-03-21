@@ -1,5 +1,6 @@
 import { useEffect } from 'react';
 import { useBrand } from '../contexts/BrandContext';
+import { resolveAssetUrl } from '../lib/supabase';
 
 /**
  * Aplica as cores do tema da marca atual como CSS variables
@@ -31,7 +32,7 @@ export function useApplyBrandTheme() {
 
       // Atualiza o título da página
       if (brand?.name || brandConfig.name) {
-        document.title = `${brand?.name || brandConfig.name} | Loja Oficial`;
+        document.title = brand?.name || brandConfig.name;
       }
 
       // Atualiza os favicons (estrutura expandida ou legado)
@@ -58,7 +59,7 @@ function updateLinkTag(rel: string, href: string | undefined, type?: string, siz
     document.head.appendChild(link);
   }
 
-  link.href = href;
+  link.href = resolveAssetUrl(href);
   if (type) link.type = type;
 }
 

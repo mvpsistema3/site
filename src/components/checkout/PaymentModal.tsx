@@ -144,6 +144,7 @@ export function PaymentModal({
               timeRemaining={timeRemaining}
               copied={copied}
               onCopy={handleCopy}
+              onNavigateToOrder={onNavigateToOrder}
               primaryColor={primaryColor}
               formatTime={formatTime}
               getTimerColor={getTimerColor}
@@ -183,7 +184,7 @@ export function PaymentModal({
 
 function PixWaitingContent({
   orderNumber, qrCode, payload, invoiceUrl,
-  timeRemaining, copied, onCopy, primaryColor, formatTime, getTimerColor,
+  timeRemaining, copied, onCopy, onNavigateToOrder, primaryColor, formatTime, getTimerColor,
 }: {
   orderNumber: string;
   qrCode: string;
@@ -192,6 +193,7 @@ function PixWaitingContent({
   timeRemaining: number | null;
   copied: boolean;
   onCopy: () => Promise<void>;
+  onNavigateToOrder: () => void;
   primaryColor: string;
   formatTime: (s: number) => string;
   getTimerColor: (s: number) => string;
@@ -271,6 +273,22 @@ function PixWaitingContent({
         <ExternalLink size={12} />
         Abrir fatura completa
       </a>
+
+      {/* Navigate to orders */}
+      <div className="mt-6 pt-5 border-t border-gray-100">
+        <motion.button
+          whileTap={{ scale: 0.98 }}
+          onClick={onNavigateToOrder}
+          className="w-full py-3 rounded-xl border-2 font-bold text-sm uppercase tracking-wide flex items-center justify-center gap-2 hover:bg-gray-50 transition-colors"
+          style={{ borderColor: primaryColor, color: primaryColor }}
+        >
+          <Package size={16} />
+          Ver meus pedidos
+        </motion.button>
+        <p className="text-[11px] text-gray-400 mt-2">
+          Você pode sair. O pagamento será confirmado automaticamente.
+        </p>
+      </div>
     </motion.div>
   );
 }

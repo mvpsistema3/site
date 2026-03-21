@@ -2,13 +2,21 @@ import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   ShoppingBag, Package, Truck, CheckCircle2, XCircle, Clock,
-  ChevronDown, ChevronUp, ExternalLink, Copy,
+  ChevronDown, ChevronUp, ExternalLink, Copy, AlertCircle,
 } from 'lucide-react';
 import { useBrandColors } from '../hooks/useTheme';
-import { useMyOrders, ORDER_STATUS_CONFIG, type OrderWithItems } from '../hooks/useOrders';
+import { useMyOrders, ORDER_STATUS_CONFIG, type OrderWithItems, type OrderItemDetail } from '../hooks/useOrders';
 import { useToastStore } from '../stores/toastStore';
 import { useBrandNavigate } from '../components/BrandLink';
 import { AccountLayout } from '../components/AccountLayout';
+
+function getItemImageUrl(item: OrderItemDetail): string | null {
+  if (item.product_image_url) return item.product_image_url;
+  const images = item.products?.product_images;
+  if (!images?.length) return null;
+  const sorted = [...images].sort((a, b) => a.position - b.position);
+  return sorted[0].url;
+}
 
 // ─── Helpers ────────────────────────────────────────────
 
@@ -46,6 +54,16 @@ const STATUS_ICONS: Record<string, React.ReactNode> = {
 };
 
 const STATUS_FLOW = ['pending', 'processing', 'separated', 'shipped', 'delivered'];
+
+const PAYMENT_STATUS_CONFIG: Record<string, { label: string; color: string; bgColor: string; icon: React.ReactNode }> = {
+  pending: { label: 'Aguardando', color: 'text-yellow-700', bgColor: 'bg-yellow-50', icon: <Clock size={13} /> },
+  confirmed: { label: 'Confirmado', color: 'text-emerald-700', bgColor: 'bg-emerald-50', icon: <CheckCircle2 size={13} /> },
+  received: { label: 'Recebido', color: 'text-emerald-700', bgColor: 'bg-emerald-50', icon: <CheckCircle2 size={13} /> },
+  overdue: { label: 'Vencido', color: 'text-red-700', bgColor: 'bg-red-50', icon: <AlertCircle size={13} /> },
+  refunded: { label: 'Estornado', color: 'text-gray-700', bgColor: 'bg-gray-100', icon: <XCircle size={13} /> },
+  failed: { label: 'Falhou', color: 'text-red-700', bgColor: 'bg-red-50', icon: <XCircle size={13} /> },
+  cancelled: { label: 'Cancelado', color: 'text-red-700', bgColor: 'bg-red-50', icon: <XCircle size={13} /> },
+};
 
 function getPaymentLabel(method: string | null) {
   if (!method) return 'Não informado';
@@ -166,15 +184,18 @@ function OrderCard({ order, primaryColor }: { order: OrderWithItems; primaryColo
       >
         <div className="flex items-center gap-3 min-w-0">
           {/* First item thumbnail */}
-          {firstItem?.product_image_url ? (
-            <div className="w-12 h-12 rounded-lg bg-gray-100 overflow-hidden flex-shrink-0">
-              <img src={firstItem.product_image_url} alt="" className="w-full h-full object-cover" />
-            </div>
-          ) : (
-            <div className="w-12 h-12 rounded-lg bg-gray-100 flex items-center justify-center flex-shrink-0">
-              <ShoppingBag size={18} className="text-gray-300" />
-            </div>
-          )}
+          {(() => {
+            const imgUrl = firstItem ? getItemImageUrl(firstItem) : null;
+            return imgUrl ? (
+              <div className="w-12 h-12 rounded-lg bg-gray-100 overflow-hidden flex-shrink-0">
+                <img src={imgUrl} alt="" className="w-full h-full object-cover" />
+              </div>
+            ) : (
+              <div className="w-12 h-12 rounded-lg bg-gray-100 flex items-center justify-center flex-shrink-0">
+                <ShoppingBag size={18} className="text-gray-300" />
+              </div>
+            );
+          })()}
 
           <div className="min-w-0">
             <div className="flex items-center gap-2 flex-wrap">
@@ -182,6 +203,15 @@ function OrderCard({ order, primaryColor }: { order: OrderWithItems; primaryColo
               <span className={`text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full ${conf.color} ${conf.bgColor}`}>
                 {conf.label}
               </span>
+              {(() => {
+                const payConf = PAYMENT_STATUS_CONFIG[order.payment_status] || PAYMENT_STATUS_CONFIG.pending;
+                return (
+                  <span className={`inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full ${payConf.color} ${payConf.bgColor}`}>
+                    {payConf.icon}
+                    {payConf.label}
+                  </span>
+                );
+              })()}
             </div>
             <p className="text-xs text-gray-400 mt-0.5">
               {formatDateShort(order.created_at)} — {itemCount} {itemCount === 1 ? 'item' : 'itens'}
@@ -224,14 +254,18 @@ function OrderCard({ order, primaryColor }: { order: OrderWithItems; primaryColo
               <div>
                 <h4 className="text-xs font-bold uppercase tracking-wide text-gray-400 mb-3">Itens</h4>
                 <div className="space-y-2.5">
-                  {order.order_items?.map(item => (
+                  {order.order_items?.map(item => {
+                    const imgUrl = getItemImageUrl(item);
+                    return (
                     <div key={item.id} className="flex items-center gap-3">
-                      {item.product_image_url ? (
+                      {imgUrl ? (
                         <div className="w-10 h-10 rounded-lg bg-gray-100 overflow-hidden flex-shrink-0">
-                          <img src={item.product_image_url} alt="" className="w-full h-full object-cover" />
+                          <img src={imgUrl} alt="" className="w-full h-full object-cover" />
                         </div>
                       ) : (
-                        <div className="w-10 h-10 rounded-lg bg-gray-100 flex-shrink-0" />
+                        <div className="w-10 h-10 rounded-lg bg-gray-100 flex items-center justify-center flex-shrink-0">
+                          <ShoppingBag size={14} className="text-gray-300" />
+                        </div>
                       )}
                       <div className="flex-1 min-w-0">
                         <p className="text-sm text-gray-700 truncate">{item.product_name}</p>
@@ -244,7 +278,8 @@ function OrderCard({ order, primaryColor }: { order: OrderWithItems; primaryColo
                         <p className="text-xs text-gray-400">Qtd: {item.quantity}</p>
                       </div>
                     </div>
-                  ))}
+                    );
+                  })}
                 </div>
               </div>
 
@@ -277,6 +312,15 @@ function OrderCard({ order, primaryColor }: { order: OrderWithItems; primaryColo
                     {getPaymentLabel(order.payment_method)}
                     {order.installments && order.installments > 1 ? ` (${order.installments}x)` : ''}
                   </p>
+                  {(() => {
+                    const payConf = PAYMENT_STATUS_CONFIG[order.payment_status] || PAYMENT_STATUS_CONFIG.pending;
+                    return (
+                      <span className={`inline-flex items-center gap-1 text-[10px] font-semibold mt-1.5 ${payConf.color}`}>
+                        {payConf.icon}
+                        {payConf.label}
+                      </span>
+                    );
+                  })()}
                 </div>
                 <div className="bg-gray-50 rounded-lg p-3">
                   <p className="text-xs text-gray-400 mb-0.5">Frete</p>

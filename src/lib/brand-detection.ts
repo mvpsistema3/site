@@ -101,10 +101,12 @@ export const getCurrentBrand = (): string => {
     return pathBrand;
   }
 
-  // 2. Checa override manual
-  const override = getBrandOverride();
-  if (override) {
-    return override;
+  // 2. Checa override manual (apenas em desenvolvimento — desabilitado em produção para segurança)
+  if (import.meta.env.DEV) {
+    const override = getBrandOverride();
+    if (override) {
+      return override;
+    }
   }
 
   // 3. Detecta pelo hostname

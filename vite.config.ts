@@ -12,10 +12,9 @@ export default defineConfig(({ mode }) => {
         allowedHosts: ['dev-site.grupogot.com'],
       },
       plugins: [react()],
-      define: {
-        'process.env.API_KEY': JSON.stringify(env.GEMINI_API_KEY),
-        'process.env.GEMINI_API_KEY': JSON.stringify(env.GEMINI_API_KEY)
-      },
+      // SECURITY: API keys removidas do bundle do cliente (V-011).
+      // Se necessário, acessar via Edge Function no backend.
+      define: {},
       resolve: {
         alias: {
           '@': path.resolve(__dirname, 'src'),

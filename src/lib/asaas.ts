@@ -36,8 +36,14 @@ export async function createAsaasPayment(
     let errorMessage = `Erro HTTP ${res.status}`;
     try {
       const err: PaymentErrorResponse = await res.json();
-      console.error('[Asaas Payment Error]', err);
-      errorMessage = err.error?.message || errorMessage;
+      console.error('[Asaas Payment Error]', JSON.stringify(err, null, 2));
+      if (err.error?.asaasError?.errors) {
+        const details = err.error.asaasError.errors.map((e: any) => e.description || e.code).join('; ');
+        console.error('[Asaas Details]', details);
+        errorMessage = details || err.error?.message || errorMessage;
+      } else {
+        errorMessage = err.error?.message || errorMessage;
+      }
     } catch {
       // response wasn't JSON
     }

@@ -1,6 +1,6 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { corsHeaders } from "../_shared/cors.ts";
+import { getCorsHeaders } from "../_shared/cors.ts";
 
 /**
  * Edge Function: asaas-webhook
@@ -20,9 +20,18 @@ import { corsHeaders } from "../_shared/cors.ts";
 const ASAAS_WEBHOOK_TOKEN = Deno.env.get("ASAAS_WEBHOOK_TOKEN");
 
 Deno.serve(async (req: Request) => {
+  const cors = getCorsHeaders(req);
+
+  function ok(data: Record<string, any>): Response {
+    return new Response(JSON.stringify(data), {
+      status: 200,
+      headers: { ...cors, "Content-Type": "application/json" },
+    });
+  }
+
   // CORS preflight
   if (req.method === "OPTIONS") {
-    return new Response(null, { headers: corsHeaders });
+    return new Response(null, { headers: cors });
   }
 
   // Always return 200 to Asaas (they pause after 15 consecutive non-2xx)
@@ -33,14 +42,23 @@ Deno.serve(async (req: Request) => {
       return ok({ received: false, reason: "method_not_allowed" });
     }
 
-    // ── Step 2: Validate webhook token ────────────────────────────────
-    const accessToken = req.headers.get("asaas-access-token");
+    // ── Step 2: Validate webhook token (OBRIGATÓRIO) ──────────────────
+    // SECURITY: O token DEVE estar configurado. Sem ele, todas as requisições são rejeitadas
+    // para evitar webhook spoofing (pagamentos falsos sendo confirmados).
+    if (!ASAAS_WEBHOOK_TOKEN) {
+      console.error("ASAAS_WEBHOOK_TOKEN não configurado — rejeitando webhook por segurança");
+      return new Response(JSON.stringify({ error: "Server misconfigured" }), {
+        status: 500,
+        headers: { ...cors, "Content-Type": "application/json" },
+      });
+    }
 
-    if (ASAAS_WEBHOOK_TOKEN && accessToken !== ASAAS_WEBHOOK_TOKEN) {
+    const accessToken = req.headers.get("asaas-access-token");
+    if (accessToken !== ASAAS_WEBHOOK_TOKEN) {
       console.warn("Invalid webhook token received");
       return new Response(JSON.stringify({ error: "Unauthorized" }), {
         status: 401,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
+        headers: { ...cors, "Content-Type": "application/json" },
       });
     }
 
@@ -53,7 +71,7 @@ Deno.serve(async (req: Request) => {
     const paymentData = event.payment;
 
     if (!eventId || !eventType || !paymentData?.id) {
-      console.warn("Malformed webhook event:", JSON.stringify(event));
+      console.warn("Malformed webhook event: missing id, event, or payment.id");
       return ok({ received: false, reason: "malformed_event" });
     }
 
@@ -138,10 +156,3 @@ Deno.serve(async (req: Request) => {
     return ok({ received: true, error: error.message || "Internal error" });
   }
 });
-
-function ok(data: Record<string, any>): Response {
-  return new Response(JSON.stringify(data), {
-    status: 200,
-    headers: { ...corsHeaders, "Content-Type": "application/json" },
-  });
-}

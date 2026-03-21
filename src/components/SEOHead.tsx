@@ -1,5 +1,6 @@
 import React, { useEffect } from 'react';
 import { useBrand } from '../contexts/BrandContext';
+import { resolveAssetUrl } from '../lib/supabase';
 import { Product } from '../types';
 
 interface SEOHeadProps {
@@ -223,7 +224,7 @@ export const SEOHead: React.FC<SEOHeadProps> = ({
         favicon.rel = 'icon';
         document.head.appendChild(favicon);
       }
-      favicon.href = mainFavicon;
+      favicon.href = resolveAssetUrl(mainFavicon);
       favicon.type = favicons.svg ? 'image/svg+xml' : 'image/x-icon';
     }
 
@@ -237,7 +238,7 @@ export const SEOHead: React.FC<SEOHeadProps> = ({
         favicon32.type = 'image/png';
         document.head.appendChild(favicon32);
       }
-      favicon32.href = favicons.png32;
+      favicon32.href = resolveAssetUrl(favicons.png32);
     }
 
     // Apple Touch Icon (180x180 para iOS)
@@ -249,7 +250,7 @@ export const SEOHead: React.FC<SEOHeadProps> = ({
       appleTouchIcon.setAttribute('sizes', '180x180');
       document.head.appendChild(appleTouchIcon);
     }
-    appleTouchIcon.href = appleTouchIconSrc;
+    appleTouchIcon.href = resolveAssetUrl(appleTouchIconSrc);
 
     // Theme Color (cor da barra do browser mobile)
     const themeColorValue = brandConfig.theme.themeColor || brandConfig.theme.primaryColor;

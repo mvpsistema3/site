@@ -1,6 +1,7 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { corsHeaders } from "../_shared/cors.ts";
+import { getCorsHeaders } from "../_shared/cors.ts";
+import { checkRateLimit, getClientIp, rateLimitResponse } from "../_shared/rate-limit.ts";
 import { findOrCreateCustomer, createPayment, getPixQrCode } from "../_shared/asaas-client.ts";
 import { validateCPF, sanitize, validateItems, validatePaymentMethod, formatDateForAsaas } from "../_shared/validation.ts";
 
@@ -21,8 +22,29 @@ import { validateCPF, sanitize, validateItems, validatePaymentMethod, formatDate
  */
 
 Deno.serve(async (req: Request) => {
+  const cors = getCorsHeaders(req);
+
+  function errorResponse(
+    status: number,
+    code: string,
+    message: string,
+    extra?: Record<string, any>
+  ): Response {
+    return new Response(
+      JSON.stringify({ error: { code, message, ...extra } }),
+      { status, headers: { ...cors, "Content-Type": "application/json" } }
+    );
+  }
+
   if (req.method === "OPTIONS") {
-    return new Response(null, { headers: corsHeaders });
+    return new Response(null, { headers: cors });
+  }
+
+  // Rate limit: 5 requisições por minuto por IP
+  const clientIp = getClientIp(req);
+  const rateCheck = checkRateLimit(clientIp, 5, 60_000);
+  if (!rateCheck.allowed) {
+    return rateLimitResponse(cors, rateCheck.retryAfterMs);
   }
 
   try {
@@ -163,7 +185,7 @@ Deno.serve(async (req: Request) => {
       if (item.variant_id) {
         const { data: variant, error: variantError } = await supabaseAdmin
           .from("product_variants")
-          .select("id, price, color, size, sku, image_url, product_id, products(id, name, price, brand_id, active)")
+          .select("id, price, color, size, sku, product_id, products(id, name, price, brand_id, active)")
           .eq("id", item.variant_id)
           .eq("active", true)
           .single();
@@ -182,7 +204,16 @@ Deno.serve(async (req: Request) => {
         productName = product.name;
         variantName = [variant.color, variant.size].filter(Boolean).join(" / ");
         sku = variant.sku || "";
-        productImageUrl = variant.image_url || "";
+
+        // Buscar imagem principal do produto na tabela product_images
+        const { data: mainImage } = await supabaseAdmin
+          .from("product_images")
+          .select("url")
+          .eq("product_id", product.id)
+          .order("position", { ascending: true })
+          .limit(1)
+          .single();
+        productImageUrl = mainImage?.url || "";
       } else {
         const { data: product, error: productError } = await supabaseAdmin
           .from("products")
@@ -198,6 +229,16 @@ Deno.serve(async (req: Request) => {
         productBrandId = product.brand_id;
         price = product.price;
         productName = product.name;
+
+        // Buscar imagem principal do produto na tabela product_images
+        const { data: mainImage } = await supabaseAdmin
+          .from("product_images")
+          .select("url")
+          .eq("product_id", product.id)
+          .order("position", { ascending: true })
+          .limit(1)
+          .single();
+        productImageUrl = mainImage?.url || "";
       }
 
       // Validate item belongs to the same brand
@@ -391,7 +432,7 @@ Deno.serve(async (req: Request) => {
       asaasPayment = await createPayment(paymentParams);
     } catch (paymentError: any) {
       // ROLLBACK: Cancel order and release stock
-      console.error("Asaas payment failed, rolling back order:", paymentError);
+      console.error("Asaas payment failed, rolling back order:", paymentError.message);
       await supabaseAdmin.rpc("cancel_order_and_release_stock", {
         p_order_id: order.id,
       });
@@ -480,7 +521,7 @@ Deno.serve(async (req: Request) => {
 
     return new Response(JSON.stringify(responseData), {
       status: 200,
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
+      headers: { ...cors, "Content-Type": "application/json" },
     });
   } catch (error: any) {
     console.error("Unhandled error in create-asaas-payment:", error);
@@ -495,18 +536,3 @@ interface AsaasPixQrCode {
   expirationDate: string;
 }
 
-// ── Helper: Error response builder ───────────────────────────────────────────
-function errorResponse(
-  status: number,
-  code: string,
-  message: string,
-  extra?: Record<string, any>
-): Response {
-  return new Response(
-    JSON.stringify({ error: { code, message, ...extra } }),
-    {
-      status,
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
-    }
-  );
-}

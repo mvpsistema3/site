@@ -10,6 +10,7 @@ import {
   FrenetQuoteResponse,
   FrenetShippingService,
   ShippingCalculateParams,
+  ShippingConfig,
   SHIPPING_ERROR_MESSAGES,
 } from '../types/shipping.types';
 
@@ -20,6 +21,35 @@ export class FrenetService {
    * protegendo o token no servidor
    */
   private static readonly EDGE_FUNCTION_NAME = 'calculate-shipping';
+
+  /** Cache da config para evitar queries repetidas na mesma sessão */
+  private static configCache: ShippingConfig | null = null;
+
+  /**
+   * Busca a configuração de frete da tabela shipping_config no Supabase
+   * Resultado é cacheado em memória para a sessão
+   */
+  static async getShippingConfig(): Promise<ShippingConfig> {
+    if (this.configCache) return this.configCache;
+
+    try {
+      const { data, error } = await supabase
+        .from('shipping_config')
+        .select('seller_cep, box_height, box_length, box_width, box_weight')
+        .limit(1)
+        .single();
+
+      if (error || !data) {
+        console.warn('[FrenetService] Erro ao buscar shipping_config:', error?.message);
+        return { seller_cep: '24330286', box_height: 12, box_length: 25, box_width: 15, box_weight: 0.8 };
+      }
+
+      this.configCache = data as ShippingConfig;
+      return this.configCache;
+    } catch {
+      return { seller_cep: '24330286', box_height: 12, box_length: 25, box_width: 15, box_weight: 0.8 };
+    }
+  }
 
   /**
    * Calcula as opções de frete disponíveis

@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import type { FrenetShippingService } from '../types/shipping.types';
 import { useToastStore } from './toastStore';
+import { getCurrentBrand } from '../lib/brand-detection';
 
 export interface CartItem {
   id: string;
@@ -302,11 +303,22 @@ export const useCartStore = create<CartState>()(
         cart: state.cart,
         coupon: state.coupon,
         shipping: state.shipping,
+        _brand: getCurrentBrand(),
       }),
       // merge: calcula campos derivados (cartCount, totais) no momento da merge,
       // evitando render intermediário com cartCount: 0 enquanto cart já tem itens.
+      // Também valida isolamento entre marcas — descarta carrinho de outra marca.
       merge: (persistedState, currentState) => {
-        const merged = { ...currentState, ...(persistedState as Partial<CartState>) };
+        const persisted = persistedState as Partial<CartState> & { _brand?: string };
+        const storedBrand = persisted?._brand;
+        const activeBrand = getCurrentBrand();
+
+        // Carrinho pertence a outra marca — descarta
+        if (storedBrand && storedBrand !== activeBrand) {
+          return currentState;
+        }
+
+        const merged = { ...currentState, ...persisted };
         if (merged.cart && merged.cart.length > 0) {
           const subtotal = merged.cart.reduce((acc: number, i: CartItem) => acc + i.price * i.quantity, 0);
           const discount = merged.coupon?.discount || 0;

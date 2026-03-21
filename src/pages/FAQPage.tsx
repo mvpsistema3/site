@@ -1,6 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { HelpCircle, Minus, Plus, Search, ArrowRight } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
+import DOMPurify from 'dompurify';
 import { useFAQs, type FAQ } from '../hooks/useFAQs';
 import { useBrandColors } from '../hooks/useTheme';
 import { useBrand } from '../contexts/BrandContext';
@@ -185,7 +186,7 @@ export function FAQPage() {
                     >
                       <div
                         className="p-5 pt-0 text-gray-600 text-sm leading-relaxed border-t border-dashed border-gray-200 mt-2"
-                        dangerouslySetInnerHTML={{ __html: faq.answer }}
+                        dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(faq.answer) }}
                       />
                     </motion.div>
                   )}

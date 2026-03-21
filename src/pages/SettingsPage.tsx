@@ -65,8 +65,12 @@ function ChangePasswordSection({ primaryColor, index }: { primaryColor: string; 
       addToast('As senhas não coincidem.', 'error');
       return;
     }
-    if (data.newPassword.length < 6) {
-      addToast('A senha deve ter pelo menos 6 caracteres.', 'error');
+    if (data.newPassword.length < 8) {
+      addToast('A senha deve ter pelo menos 8 caracteres.', 'error');
+      return;
+    }
+    if (!/[A-Z]/.test(data.newPassword) || !/[0-9]/.test(data.newPassword) || !/[^A-Za-z0-9]/.test(data.newPassword)) {
+      addToast('A senha deve conter pelo menos uma letra maiúscula, um número e um caractere especial.', 'error');
       return;
     }
 

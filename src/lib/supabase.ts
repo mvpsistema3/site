@@ -20,11 +20,25 @@ export const supabasePublic = createClient(supabaseUrl, supabaseAnonKey, {
     persistSession: false,
     autoRefreshToken: false,
     detectSessionInUrl: false,
+    storageKey: 'sb-public-auth-token',
   },
 });
 
 // Credenciais expostas para queries públicas via fetch direto (sem JWT)
 export { supabaseUrl, supabaseAnonKey };
+
+/**
+ * Resolve URL de asset de marca.
+ * Se o path começa com /storage/, prefixar com SUPABASE_URL (asset no Storage).
+ * Caso contrário, retorna como está (asset local em /public/).
+ */
+export function resolveAssetUrl(path: string | undefined): string {
+  if (!path) return '';
+  if (path.startsWith('/storage/')) {
+    return `${supabaseUrl}${path}`;
+  }
+  return path;
+}
 
 // Database Types (You'll update these based on your Supabase schema)
 export type Product = {

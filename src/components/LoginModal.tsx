@@ -62,8 +62,13 @@ export const LoginModal: React.FC<LoginModalProps> = ({ isOpen, onClose }) => {
     setLoading(true);
     setError(null);
 
-    if (password.length < 6) {
-      setError('A senha deve ter pelo menos 6 caracteres.');
+    if (password.length < 8) {
+      setError('A senha deve ter pelo menos 8 caracteres.');
+      setLoading(false);
+      return;
+    }
+    if (!/[A-Z]/.test(password) || !/[0-9]/.test(password) || !/[^A-Za-z0-9]/.test(password)) {
+      setError('A senha deve conter pelo menos uma letra maiúscula, um número e um caractere especial.');
       setLoading(false);
       return;
     }

@@ -145,21 +145,15 @@ export interface ShippingState {
 // ============================================
 
 /**
- * Dimensões padrão da caixa usada para todos os pedidos
+ * Interface para configuração de frete vinda do Supabase
  */
-export const STANDARD_BOX_DIMENSIONS = {
-  height: 12,       // cm
-  length: 25,       // cm
-  width: 15,        // cm
-  weight: 0.8,      // kg
-  sku: 'CAIXA_PADRAO',
-  category: 'Tabacaria'
-} as const;
-
-/**
- * CEP de origem (Niterói - RJ)
- */
-export const SELLER_CEP = '24330286';
+export interface ShippingConfig {
+  seller_cep: string;
+  box_height: number;
+  box_length: number;
+  box_width: number;
+  box_weight: number;
+}
 
 /**
  * Mensagens de erro padronizadas

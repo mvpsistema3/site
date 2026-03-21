@@ -3,8 +3,15 @@
  * Handles all communication with the Asaas payment gateway.
  */
 
-const ASAAS_BASE_URL = Deno.env.get("ASAAS_BASE_URL") || "https://sandbox.asaas.com/api/v3";
-const ASAAS_API_KEY = Deno.env.get("ASAAS_API_KEY")!;
+const ASAAS_BASE_URL = Deno.env.get("ASAAS_BASE_URL");
+const ASAAS_API_KEY = Deno.env.get("ASAAS_API_KEY");
+
+if (!ASAAS_BASE_URL) {
+  throw new Error("ASAAS_BASE_URL não configurado. Configure via: supabase secrets set ASAAS_BASE_URL='https://api.asaas.com/v3'");
+}
+if (!ASAAS_API_KEY) {
+  throw new Error("ASAAS_API_KEY não configurado. Configure via: supabase secrets set ASAAS_API_KEY='sua-chave'");
+}
 
 interface AsaasCustomer {
   id: string;
@@ -116,6 +123,11 @@ export async function findOrCreateCustomer(
 
       return asaasId;
     }
+  } else {
+    console.error("Asaas customer search failed:", {
+      status: searchRes.status,
+      body: await searchRes.text(),
+    });
   }
 
   // 3. Create new customer
@@ -131,11 +143,19 @@ export async function findOrCreateCustomer(
   });
 
   if (!createRes.ok) {
-    const err = await createRes.json();
-    console.error("Failed to create Asaas customer:", err);
+    const errText = await createRes.text();
+    let err: any = {};
+    try { err = JSON.parse(errText); } catch { /* not JSON */ }
+    console.error("Failed to create Asaas customer:", {
+      status: createRes.status,
+      body: errText || "(empty)",
+      errors: err.errors,
+    });
 
-    let message = "Erro ao cadastrar cliente no gateway de pagamento";
-    if (err.errors?.some((e: any) => e.code === "invalid_cpfCnpj")) {
+    let message = `Erro ao cadastrar cliente no gateway de pagamento (HTTP ${createRes.status})`;
+    if (createRes.status === 401 || createRes.status === 403) {
+      message = "Falha de autenticação com o gateway de pagamento. Verifique a API key.";
+    } else if (err.errors?.some((e: any) => e.code === "invalid_cpfCnpj")) {
       message = "CPF inválido. Por favor, verifique o CPF informado.";
     } else if (err.errors?.some((e: any) => e.code === "invalid_mobilePhone")) {
       message = "Telefone inválido. Por favor, verifique o telefone informado.";
@@ -194,7 +214,14 @@ export async function createPayment(params: CreatePaymentParams): Promise<AsaasP
     }
   }
 
-  console.log("Creating Asaas payment:", JSON.stringify(payload, null, 2));
+  // Log apenas metadados seguros (NUNCA dados de cartão/CPF/dados pessoais)
+  console.log("Creating Asaas payment:", {
+    billingType: payload.billingType,
+    value: payload.value,
+    installmentCount: payload.installmentCount,
+    externalReference: payload.externalReference,
+    hasCreditCard: !!payload.creditCard,
+  });
 
   const res = await asaasFetch("/payments", {
     method: "POST",
@@ -204,16 +231,23 @@ export async function createPayment(params: CreatePaymentParams): Promise<AsaasP
   const responseText = await res.text();
 
   if (!res.ok) {
-    console.error("Asaas payment creation failed:", res.status, responseText);
+    console.error("Asaas payment creation failed:", {
+      status: res.status,
+      statusText: res.statusText,
+      url: `${ASAAS_BASE_URL}/payments`,
+      responseBody: responseText || "(empty)",
+    });
     let errorData;
     try {
       errorData = JSON.parse(responseText);
     } catch {
       // not JSON
     }
-    const error: any = new Error("Erro ao criar cobrança no Asaas");
+    const error: any = new Error(
+      errorData?.errors?.[0]?.description || `Erro ao criar cobrança no Asaas (HTTP ${res.status})`
+    );
     error.asaasStatus = res.status;
-    error.asaasError = errorData || responseText;
+    error.asaasError = errorData || { rawBody: responseText, httpStatus: res.status };
     throw error;
   }
 

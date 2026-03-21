@@ -3,6 +3,11 @@ import { supabase, type Order } from '../lib/supabase';
 import { useBrand } from '../contexts/BrandContext';
 import { useAuth } from '../contexts/AuthContext';
 
+export interface ProductImage {
+  url: string;
+  position: number;
+}
+
 export interface OrderItemDetail {
   id: string;
   product_name: string;
@@ -12,6 +17,7 @@ export interface OrderItemDetail {
   quantity: number;
   subtotal: number;
   product_image_url: string | null;
+  products: { product_images: ProductImage[] } | null;
 }
 
 export interface OrderWithItems {
@@ -132,7 +138,8 @@ export function useMyOrders(statusFilter?: string) {
         .select(`
           *,
           order_items(
-            id, product_name, variant_name, sku, price, quantity, subtotal, product_image_url
+            id, product_name, variant_name, sku, price, quantity, subtotal, product_image_url,
+            products(product_images(url, position))
           )
         `)
         .eq('user_id', user.id)
@@ -171,7 +178,8 @@ export function useOrder(orderId: string) {
         .select(`
           *,
           order_items(
-            id, product_name, variant_name, sku, price, quantity, subtotal, product_image_url
+            id, product_name, variant_name, sku, price, quantity, subtotal, product_image_url,
+            products(product_images(url, position))
           )
         `)
         .eq('id', orderId)

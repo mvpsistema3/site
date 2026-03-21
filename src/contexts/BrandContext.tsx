@@ -2,6 +2,7 @@ import React, { createContext, useContext, useEffect, useState, useCallback, use
 import { supabaseUrl, supabaseAnonKey } from '../lib/supabase';
 import { getCurrentBrand } from '../lib/brand-detection';
 import { getBrandConfig, BrandConfig } from '../config/brands';
+import { useCartStore } from '../stores/cartStore';
 
 interface Brand {
   id: string;
@@ -146,6 +147,7 @@ export const BrandProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     const handleHashChange = () => {
       const newSlug = getCurrentBrand();
       if (newSlug !== currentSlug) {
+        useCartStore.getState().clearCart();
         loadBrand(newSlug);
       }
     };
