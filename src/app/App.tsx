@@ -2968,9 +2968,15 @@ const ProductDetailPage = () => {
   const dim2Label = variantDimensions?.[1]?.name || 'Tamanho';
   const dim2Type = variantDimensions?.[1]?.type || 'text';
 
-  // Extrair cores e tamanhos únicos de TODAS as variantes, respeitando a ordem de variant_dimensions
-  const rawColors = [...new Set(variants.map((v: any) => v.color).filter(Boolean))] as string[];
-  const rawSizes = [...new Set(variants.map((v: any) => v.size).filter(Boolean))] as string[];
+  // Extrair cores e tamanhos únicos de TODAS as variantes (case-insensitive), respeitando a ordem de variant_dimensions
+  const rawColors = variants.map((v: any) => v.color).filter(Boolean).reduce((acc: string[], c: string) => {
+    if (!acc.some(existing => existing.toLowerCase() === c.toLowerCase())) acc.push(c);
+    return acc;
+  }, []);
+  const rawSizes = variants.map((v: any) => v.size).filter(Boolean).reduce((acc: string[], s: string) => {
+    if (!acc.some(existing => existing.toLowerCase() === s.toLowerCase())) acc.push(s);
+    return acc;
+  }, []);
 
   const dim1Order = variantDimensions?.[0]?.values?.map((v: any) => v.name) || [];
   const dim2Order = variantDimensions?.[1]?.values?.map((v: any) => v.name) || [];
@@ -2997,9 +3003,12 @@ const ProductDetailPage = () => {
       })
     : rawSizes;
 
-  // Cores hexadecimais mapeadas
+  // Cores hexadecimais mapeadas (case-insensitive, usa a chave normalizada do rawColors)
   const colorHexMap = variants.reduce((acc: Record<string, string>, v: any) => {
-    if (v.color && v.color_hex) acc[v.color] = v.color_hex;
+    if (v.color && v.color_hex) {
+      const normalized = rawColors.find(c => c.toLowerCase() === v.color.toLowerCase()) || v.color;
+      acc[normalized] = v.color_hex;
+    }
     return acc;
   }, {});
 
@@ -3012,21 +3021,24 @@ const ProductDetailPage = () => {
 
   // Verificar estoque da variante selecionada
   const getVariantStock = (color: string, size: string) => {
+    const matchColor = (v: any) => v.color && color && v.color.toLowerCase() === color.toLowerCase();
+    const matchSize = (v: any) => v.size && size && v.size.toLowerCase() === size.toLowerCase();
+
     // Se não tem tamanhos (produto apenas com cores)
     if (sizes.length === 0 && color) {
-      const variant = variants.find((v: any) => v.color === color && !v.size);
+      const variant = variants.find((v: any) => matchColor(v) && !v.size);
       return variant?.stock || 0;
     }
 
     // Se tem tamanhos e cores
     if (color && size) {
-      const variant = variants.find((v: any) => v.color === color && v.size === size);
+      const variant = variants.find((v: any) => matchColor(v) && matchSize(v));
       return variant?.stock || 0;
     }
 
     // Se apenas tamanhos (sem cores)
     if (colors.length === 0 && size) {
-      const variant = variants.find((v: any) => v.size === size && !v.color);
+      const variant = variants.find((v: any) => matchSize(v) && !v.color);
       return variant?.stock || 0;
     }
 
@@ -3036,13 +3048,15 @@ const ProductDetailPage = () => {
   // Retorna o preço da variante selecionada (com fallback para o produto)
   const getVariantPricing = (color: string, size: string) => {
     let variant: any = null;
+    const matchC = (v: any) => v.color && color && v.color.toLowerCase() === color.toLowerCase();
+    const matchS = (v: any) => v.size && size && v.size.toLowerCase() === size.toLowerCase();
 
     if (sizes.length === 0 && color) {
-      variant = variants.find((v: any) => v.color === color && !v.size);
+      variant = variants.find((v: any) => matchC(v) && !v.size);
     } else if (color && size) {
-      variant = variants.find((v: any) => v.color === color && v.size === size);
+      variant = variants.find((v: any) => matchC(v) && matchS(v));
     } else if (colors.length === 0 && size) {
-      variant = variants.find((v: any) => v.size === size && !v.color);
+      variant = variants.find((v: any) => matchS(v) && !v.color);
     }
 
     const variantPrice = variant?.price != null ? Number(variant.price) : null;
