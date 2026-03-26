@@ -3378,7 +3378,7 @@ const ProductDetailPage = () => {
                               ? 'ring-1 ring-gray-200 hover:ring-gray-400 hover:scale-105'
                               : 'ring-1 ring-gray-100 opacity-30 cursor-not-allowed'
                         }`}
-                        style={{ backgroundColor: colorHexMap[color] || '#cccccc' }}
+                        style={{ backgroundColor: colorHexMap[color] || color }}
                         title={`${color}${!hasStock ? ' (Sem estoque)' : ''}`}
                       >
                         {!hasStock && (
