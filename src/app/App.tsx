@@ -3003,14 +3003,32 @@ const ProductDetailPage = () => {
       })
     : rawSizes;
 
-  // Cores hexadecimais mapeadas (case-insensitive, usa a chave normalizada do rawColors)
+  // Hex maps das dimensões (fonte primária: variant_dimensions, fallback: variant rows)
+  const dim1HexFromDims: Record<string, string> = {};
+  const dim2HexFromDims: Record<string, string> = {};
+  variantDimensions?.[0]?.values?.forEach((v: any) => { if (v.name && v.hex) dim1HexFromDims[v.name] = v.hex; });
+  variantDimensions?.[1]?.values?.forEach((v: any) => { if (v.name && v.hex) dim2HexFromDims[v.name] = v.hex; });
+
+  // Fallback: extrair hex das variant rows baseado no tipo da dimensão
   const colorHexMap = variants.reduce((acc: Record<string, string>, v: any) => {
-    if (v.color && v.color_hex) {
+    if (v.color && v.color_hex && dim1Type === 'color') {
       const normalized = rawColors.find(c => c.toLowerCase() === v.color.toLowerCase()) || v.color;
-      acc[normalized] = v.color_hex;
+      if (!acc[normalized]) acc[normalized] = v.color_hex;
     }
     return acc;
-  }, {});
+  }, {} as Record<string, string>);
+
+  const sizeHexMap = variants.reduce((acc: Record<string, string>, v: any) => {
+    if (v.size && v.color_hex && dim2Type === 'color') {
+      const normalized = rawSizes.find(s => s.toLowerCase() === v.size.toLowerCase()) || v.size;
+      if (!acc[normalized]) acc[normalized] = v.color_hex;
+    }
+    return acc;
+  }, {} as Record<string, string>);
+
+  // Merge: variant_dimensions hex tem prioridade sobre variant rows
+  const dim1Hex = { ...colorHexMap, ...dim1HexFromDims };
+  const dim2Hex = { ...sizeHexMap, ...dim2HexFromDims };
 
   // Definir cor padrão
   useEffect(() => {
@@ -3378,7 +3396,7 @@ const ProductDetailPage = () => {
                               ? 'ring-1 ring-gray-200 hover:ring-gray-400 hover:scale-105'
                               : 'ring-1 ring-gray-100 opacity-30 cursor-not-allowed'
                         }`}
-                        style={{ backgroundColor: colorHexMap[color] || color }}
+                        style={{ backgroundColor: dim1Hex[color] || color }}
                         title={`${color}${!hasStock ? ' (Sem estoque)' : ''}`}
                       >
                         {!hasStock && (
@@ -3449,7 +3467,7 @@ const ProductDetailPage = () => {
                               ? 'ring-1 ring-gray-200 hover:ring-gray-400 hover:scale-105'
                               : 'ring-1 ring-gray-100 opacity-30 cursor-not-allowed'
                         }`}
-                        style={{ backgroundColor: size }}
+                        style={{ backgroundColor: dim2Hex[size] || size }}
                         title={`${size}${isOutOfStock ? ' (Sem estoque)' : ''}`}
                       >
                         {isOutOfStock && (
