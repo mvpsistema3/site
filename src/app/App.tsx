@@ -59,6 +59,7 @@ import { ProductDetailSkeleton } from '../components/ProductDetailSkeleton';
 import { ShopPageSkeleton } from '../components/ShopPageSkeleton';
 import { MarqueeBanner } from '../components/MarqueeBanner';
 import { useBanners } from '../hooks/useBanners';
+import { useEssenceSection } from '../hooks/useEssenceSection';
 import { ProductSectionWithTabs } from '../components/ProductSectionWithTabs';
 import { ToastNotification } from '../components/ToastNotification';
 import { motion, AnimatePresence, useScroll, useTransform, useInView } from 'framer-motion';
@@ -1867,6 +1868,7 @@ const HomePage = () => {
   const navigate = useBrandNavigate();
   const { data: tabacariaCategories, isLoading: tabacariaLoading } = useTabacariaCategories();
   const { data: banners } = useBanners();
+  const { data: essenceSection } = useEssenceSection();
 
   // Filtrar destaques com reatividade ao login
   const visibleFeaturedProducts = useMemo(() => {
@@ -2243,50 +2245,52 @@ const HomePage = () => {
         </ScrollReveal>
       )}
 
-      {/* 7. Quem Somos - Editorial Streetwear (scroll-triggered) */}
-      <ScrollReveal direction="up" distance={50} duration={0.7} threshold={0.2}>
-        <section className="relative bg-white py-24 md:py-32 overflow-hidden">
-          {/* Giant background text */}
-          <div className="absolute inset-0 flex items-center justify-center pointer-events-none select-none">
-            <span className="text-[120px] md:text-[200px] lg:text-[280px] font-black text-gray-50 uppercase leading-none">
-              VIBES
-            </span>
-          </div>
-
-          <div className="container mx-auto px-6 md:px-8 relative z-10">
-            <div className="max-w-4xl mx-auto">
-              <ScrollReveal direction="up" distance={40}>
-                <div className="text-center mb-8">
-                  <div className="w-12 h-[2px] mx-auto mb-6" style={{ backgroundColor: primaryColor }} />
-                  <h2 className="font-sans text-5xl md:text-6xl lg:text-7xl font-black uppercase tracking-tight">
-                    {displayName} <span style={{ color: primaryColor }}>VIBES</span>
-                  </h2>
-                </div>
-              </ScrollReveal>
-
-              <ScrollReveal direction="up" delay={0.2} distance={30}>
-                <p className="text-gray-500 leading-relaxed text-lg md:text-xl text-center max-w-2xl mx-auto mb-12">
-                  Nascida nas ruas, criada para o mundo. A {displayName} não é apenas uma marca de roupas, é um movimento.
-                  Representamos a autenticidade do skate, a liberdade do graffiti e a força da comunidade urbana.
-                </p>
-              </ScrollReveal>
-
-              <ScrollReveal direction="up" delay={0.3}>
-                <div className="text-center">
-                  <BrandLink to="/about">
-                    <button
-                      className="group font-bold uppercase tracking-widest px-10 py-4 text-sm border-2 border-black bg-transparent text-black transition-all duration-300 hover:bg-black hover:text-white"
-                    >
-                      CONHEÇA NOSSA HISTÓRIA
-                      <ArrowRight className="inline-block ml-3 w-4 h-4 transition-transform duration-300 group-hover:translate-x-1" />
-                    </button>
-                  </BrandLink>
-                </div>
-              </ScrollReveal>
+      {/* 7. Essência da Marca - Dinâmico do banco (essence_section) */}
+      {essenceSection && (
+        <ScrollReveal direction="up" distance={50} duration={0.7} threshold={0.2}>
+          <section className="relative bg-white py-24 md:py-32 overflow-hidden">
+            {/* Giant background text */}
+            <div className="absolute inset-0 flex items-center justify-center pointer-events-none select-none">
+              <span className="text-[120px] md:text-[200px] lg:text-[280px] font-black text-gray-50 uppercase leading-none">
+                {essenceSection.subtitle}
+              </span>
             </div>
-          </div>
-        </section>
-      </ScrollReveal>
+
+            <div className="container mx-auto px-6 md:px-8 relative z-10">
+              <div className="max-w-4xl mx-auto">
+                <ScrollReveal direction="up" distance={40}>
+                  <div className="text-center mb-8">
+                    <div className="w-12 h-[2px] mx-auto mb-6" style={{ backgroundColor: primaryColor }} />
+                    <h2 className="font-sans text-5xl md:text-6xl lg:text-7xl font-black uppercase tracking-tight">
+                      {essenceSection.title.split(' ').slice(0, -1).join(' ')}{' '}
+                      <span style={{ color: primaryColor }}>{essenceSection.title.split(' ').slice(-1)[0]}</span>
+                    </h2>
+                  </div>
+                </ScrollReveal>
+
+                <ScrollReveal direction="up" delay={0.2} distance={30}>
+                  <p className="text-gray-500 leading-relaxed text-lg md:text-xl text-center max-w-2xl mx-auto mb-12">
+                    {essenceSection.description}
+                  </p>
+                </ScrollReveal>
+
+                <ScrollReveal direction="up" delay={0.3}>
+                  <div className="text-center">
+                    <BrandLink to="/about">
+                      <button
+                        className="group font-bold uppercase tracking-widest px-10 py-4 text-sm border-2 border-black bg-transparent text-black transition-all duration-300 hover:bg-black hover:text-white"
+                      >
+                        {essenceSection.button_text}
+                        <ArrowRight className="inline-block ml-3 w-4 h-4 transition-transform duration-300 group-hover:translate-x-1" />
+                      </button>
+                    </BrandLink>
+                  </div>
+                </ScrollReveal>
+              </div>
+            </div>
+          </section>
+        </ScrollReveal>
+      )}
 
       {/* 8. FAQ Section */}
       <ScrollReveal direction="up" distance={40}>
@@ -3396,7 +3400,7 @@ const ProductDetailPage = () => {
                               ? 'ring-1 ring-gray-200 hover:ring-gray-400 hover:scale-105'
                               : 'ring-1 ring-gray-100 opacity-30 cursor-not-allowed'
                         }`}
-                        style={{ backgroundColor: dim1Hex[color] || color }}
+                        style={{ background: dim1Hex[color] || color }}
                         title={`${color}${!hasStock ? ' (Sem estoque)' : ''}`}
                       >
                         {!hasStock && (
@@ -3467,7 +3471,7 @@ const ProductDetailPage = () => {
                               ? 'ring-1 ring-gray-200 hover:ring-gray-400 hover:scale-105'
                               : 'ring-1 ring-gray-100 opacity-30 cursor-not-allowed'
                         }`}
-                        style={{ backgroundColor: dim2Hex[size] || size }}
+                        style={{ background: dim2Hex[size] || size }}
                         title={`${size}${isOutOfStock ? ' (Sem estoque)' : ''}`}
                       >
                         {isOutOfStock && (
