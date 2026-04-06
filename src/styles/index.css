@@ -144,7 +144,7 @@ body {
 /* Faster marquee for mobile */
 @media (max-width: 768px) {
   .animate-marquee {
-    animation-duration: 8s;
+    animation-duration: 4s;
   }
 }
 
