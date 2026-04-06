@@ -7,7 +7,7 @@ import {
   ChevronLeft, ChevronRight, Star, Truck, ShieldCheck,
   CreditCard, Instagram, Facebook, Youtube, Twitter,
   MapPin, Calendar, Lock, CheckCircle, Minus, Plus, Trash2, HelpCircle,
-  ArrowRight, Package, LogOut
+  ArrowRight, Package, LogOut, Users
 } from 'lucide-react';
 import { Product, FilterState } from '../types';
 import { BrandProvider, useBrand } from '../contexts/BrandContext';
@@ -26,6 +26,7 @@ import { ProfilePage } from '../pages/ProfilePage';
 import { OrdersPage } from '../pages/OrdersPage';
 import { SettingsPage } from '../pages/SettingsPage';
 import { FavoritesPage } from '../pages/FavoritesPage';
+import { ResellersPage } from '../pages/ResellersPage';
 import { ProtectedRoute } from '../components/ProtectedRoute';
 import { useApplyBrandTheme, useBrandColors } from '../hooks/useTheme';
 import { getBrandUrlPrefix } from '../lib/brand-detection';
@@ -1265,9 +1266,21 @@ const Header = () => {
                     </motion.div>
                   ))}
 
+                  <div className="h-px bg-gray-100 mx-3 my-1.5" />
+                  <motion.div variants={{ hidden: { opacity: 0, x: -16 }, visible: { opacity: 1, x: 0 } }}>
+                    <BrandLink
+                      to="/revendedores"
+                      onClick={() => setIsMobileMenuOpen(false)}
+                      className="flex items-center gap-3 mx-1 px-3 py-3 text-[13px] font-semibold rounded-lg transition-colors uppercase tracking-wide"
+                      style={{ color: primaryColor, backgroundColor: `${primaryColor}08` }}
+                    >
+                      <Users size={16} />
+                      Revendedores
+                    </BrandLink>
+                  </motion.div>
+
                   {hasLoyalty && (
                     <>
-                      <div className="h-px bg-gray-100 mx-3 my-1.5" />
                       <motion.div variants={{ hidden: { opacity: 0, x: -16 }, visible: { opacity: 1, x: 0 } }}>
                         <BrandLink
                           to="/club"
@@ -2565,6 +2578,24 @@ const ProductListPage = () => {
                   </div>
                 ))}
               </div>
+
+              {/* Revendedores */}
+              <div className="pt-4">
+                <BrandLink
+                  to="/revendedores"
+                  className="flex items-center gap-2 text-sm font-semibold transition-all duration-200 group"
+                  style={{ color: primaryColor }}
+                >
+                  <Users size={14} />
+                  <span className="relative">
+                    Revendedores
+                    <span
+                      className="absolute bottom-0 left-0 h-0.5 w-0 group-hover:w-full transition-all duration-200"
+                      style={{ backgroundColor: primaryColor }}
+                    />
+                  </span>
+                </BrandLink>
+              </div>
             </div>
           )}
 
@@ -3774,6 +3805,7 @@ const App = () => {
                         <Route path="/about" element={<Navigate to="/page/sobre-nos" replace />} />
                         <Route path="/club" element={<Navigate to="/page/sobre-nos" replace />} />
                         <Route path="/faq" element={<FAQPage />} />
+                        <Route path="/revendedores" element={<ResellersPage />} />
                         <Route path="/profile" element={<ProtectedRoute><ProfilePage /></ProtectedRoute>} />
                         <Route path="/orders" element={<ProtectedRoute><OrdersPage /></ProtectedRoute>} />
                         <Route path="/favorites" element={<ProtectedRoute><FavoritesPage /></ProtectedRoute>} />
@@ -3794,6 +3826,7 @@ const App = () => {
                   <Route path="/about" element={<Navigate to="/page/sobre-nos" replace />} />
                   <Route path="/club" element={<Navigate to="/page/sobre-nos" replace />} />
                   <Route path="/faq" element={<FAQPage />} />
+                  <Route path="/revendedores" element={<ResellersPage />} />
                   <Route path="/profile" element={<ProtectedRoute><ProfilePage /></ProtectedRoute>} />
                   <Route path="/orders" element={<ProtectedRoute><OrdersPage /></ProtectedRoute>} />
                   <Route path="/favorites" element={<ProtectedRoute><FavoritesPage /></ProtectedRoute>} />
