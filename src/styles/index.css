@@ -134,7 +134,7 @@ body {
 }
 
 .animate-marquee {
-  animation: marquee 22s linear infinite;
+  animation: marquee 15s linear infinite;
 }
 
 .animate-marquee:hover {
@@ -144,7 +144,7 @@ body {
 /* Faster marquee for mobile */
 @media (max-width: 768px) {
   .animate-marquee {
-    animation-duration: 12s;
+    animation-duration: 8s;
   }
 }
 
