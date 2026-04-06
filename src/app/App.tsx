@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { HashRouter, Routes, Route, Link, Navigate, useParams, useNavigate, useLocation, useNavigationType } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Link, Navigate, useParams, useNavigate, useLocation, useNavigationType } from 'react-router-dom';
 import { QueryClientProvider } from '@tanstack/react-query';
 import { ReactQueryDevtools } from '@tanstack/react-query-devtools';
 import {
@@ -1046,6 +1046,18 @@ const Header = () => {
                     )}
                   </div>
                 ))}
+
+                <BrandLink
+                  to="/revendedores"
+                  className="relative px-3.5 py-2.5 text-[12px] font-semibold uppercase tracking-widest transition-colors group"
+                  style={{ color: primaryColor }}
+                >
+                  Revendedores
+                  <span
+                    className="absolute bottom-0 left-1/2 -translate-x-1/2 w-0 h-[2px] rounded-full transition-all duration-300 group-hover:w-3/4"
+                    style={{ backgroundColor: primaryColor }}
+                  />
+                </BrandLink>
 
                 {hasLoyalty && (
                   <BrandLink
@@ -3778,7 +3790,7 @@ const App = () => {
   return (
     <ErrorBoundary>
     <QueryClientProvider client={queryClient}>
-      <HashRouter>
+      <BrowserRouter>
         <BrandProvider>
           <AuthProvider>
             <SearchProvider>
@@ -3840,7 +3852,7 @@ const App = () => {
             </SearchProvider>
           </AuthProvider>
         </BrandProvider>
-      </HashRouter>
+      </BrowserRouter>
       <ReactQueryDevtools initialIsOpen={false} />
     </QueryClientProvider>
     </ErrorBoundary>
