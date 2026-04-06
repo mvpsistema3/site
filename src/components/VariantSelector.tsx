@@ -167,7 +167,7 @@ export const VariantSelector: React.FC<VariantSelectorProps> = ({
                   <div
                     className="w-full h-full rounded-full"
                     style={{
-                      backgroundColor: color === 'white' ? '#ffffff' :
+                      background: color === 'white' ? '#ffffff' :
                                      color === 'black' ? '#000000' :
                                      color === 'gray' ? '#6b7280' :
                                      color === 'red' ? '#ef4444' :

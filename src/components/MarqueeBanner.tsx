@@ -42,13 +42,6 @@ export function MarqueeBanner({
     fast: 'animate-marquee',
   }[speed];
 
-  // Ajustar duração via inline style
-  const animationDuration = {
-    slow: '40s',
-    normal: '30s',
-    fast: '20s',
-  }[speed];
-
   return (
     <div
       className={`overflow-hidden py-3 ${className}`}
@@ -56,7 +49,7 @@ export function MarqueeBanner({
     >
       <div
         className={`flex whitespace-nowrap ${speedClass}`}
-        style={{ animationDuration }}
+        style={{}}
       >
         {duplicatedItems.map((item, index) => {
           const IconComponent = item.icon ? iconMap[item.icon] : null;
