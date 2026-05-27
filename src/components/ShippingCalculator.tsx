@@ -5,7 +5,7 @@
  */
 
 import React, { useState, useEffect, useMemo } from 'react';
-import { Package, AlertCircle, CheckCircle, Info, Truck } from 'lucide-react';
+import { Package, AlertCircle, CheckCircle, Info, Truck, MapPin } from 'lucide-react';
 import { ShippingCalculatorProps, FrenetShippingService } from '../types/shipping.types';
 import { useShipping } from '../hooks/useShipping';
 import { ViaCEPService } from '../lib/viaCep';
@@ -298,6 +298,40 @@ export function ShippingCalculator({
           </div>
         </div>
       )}
+
+      {/* Prévia de Retirada no Local */}
+      {brand?.settings?.pickupEnabled && brand?.settings?.pickupAddress && (
+        <PickupPreview pickupAddress={brand.settings.pickupAddress} />
+      )}
+    </div>
+  );
+}
+
+/** Prévia informativa da opção de retirada */
+function PickupPreview({ pickupAddress }: { pickupAddress: Record<string, string> }) {
+  const addressLine = [pickupAddress.street, pickupAddress.number, pickupAddress.neighborhood, pickupAddress.city]
+    .filter(Boolean)
+    .join(', ');
+
+  return (
+    <div className="bg-green-50 border border-green-200 rounded-xl p-4">
+      <div className="flex items-start gap-3">
+        <div className="p-2 bg-green-100 rounded-lg">
+          <MapPin className="w-4 h-4 text-green-700" />
+        </div>
+        <div className="flex-1">
+          <div className="flex items-center gap-2">
+            <p className="text-sm font-bold text-green-800">Retirada no Local</p>
+            <span className="text-[10px] font-bold text-green-700 bg-green-200 px-1.5 py-0.5 rounded-full uppercase tracking-wide">
+              Grátis
+            </span>
+          </div>
+          {addressLine && (
+            <p className="text-xs text-green-700 mt-1">{addressLine}</p>
+          )}
+          <p className="text-xs text-green-600 mt-1">Disponível no checkout</p>
+        </div>
+      </div>
     </div>
   );
 }
