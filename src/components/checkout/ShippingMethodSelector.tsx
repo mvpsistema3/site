@@ -1,6 +1,6 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
-import { Truck, Package, Check, Loader2 } from 'lucide-react';
+import { Truck, Package, Check, Loader2, MapPin } from 'lucide-react';
 import { useShipping } from '../../hooks/useShipping';
 import { useCartStore } from '../../stores/cartStore';
 import { useBrand } from '../../contexts/BrandContext';
@@ -9,12 +9,22 @@ import { formatCurrency } from '../../lib/currency.utils';
 import type { ShippingSelectionData } from '../../types/checkout.types';
 import type { FrenetShippingService } from '../../types/shipping.types';
 
+type DeliveryMode = 'none' | 'pickup' | 'shipping';
+
 interface ShippingMethodSelectorProps {
   cep: string;
   onShippingReady: (data: ShippingSelectionData) => void;
+  onPickupSelected?: (isPickup: boolean) => void;
+  /** Permite restaurar o modo correto ao voltar de outro step */
+  initialMode?: DeliveryMode;
 }
 
-export function ShippingMethodSelector({ cep, onShippingReady }: ShippingMethodSelectorProps) {
+export function ShippingMethodSelector({
+  cep,
+  onShippingReady,
+  onPickupSelected,
+  initialMode = 'none',
+}: ShippingMethodSelectorProps) {
   const { primaryColor } = useBrandColors();
   const { brand } = useBrand();
   const cart = useCartStore((s) => s.cart);
@@ -38,20 +48,30 @@ export function ShippingMethodSelector({ cep, onShippingReady }: ShippingMethodS
   const freeShippingThreshold = brand?.settings?.freeShippingThreshold || 0;
   const qualifiesForFreeShipping = freeShippingThreshold > 0 && cartSubtotal >= freeShippingThreshold;
 
-  // Calculate shipping when CEP is provided
+  // Pickup config da marca
+  const pickupEnabled = brand?.settings?.pickupEnabled === true;
+  const pickupAddress = brand?.settings?.pickupAddress;
+
+  // Modo de entrega selecionado
+  const [mode, setMode] = useState<DeliveryMode>(initialMode);
+
+  // Calculate shipping when CEP is provided and mode is shipping (ou nenhum mode ainda)
   useEffect(() => {
+    if (mode === 'pickup') return; // Não calcular frete quando é retirada
     const digits = cep?.replace(/\D/g, '') || '';
     if (digits.length === 8 && cartSubtotal > 0) {
       calculateShipping({ destinationCEP: digits, invoiceValue: cartSubtotal });
     }
-  }, [cep, cartSubtotal, calculateShipping]);
+  }, [cep, cartSubtotal, calculateShipping, mode]);
 
-  const handleSelect = (service: FrenetShippingService) => {
+  const handleSelectShipping = (service: FrenetShippingService) => {
+    setMode('shipping');
+    onPickupSelected?.(false);
+
     selectService(service);
 
     const cost = qualifiesForFreeShipping ? 0 : parseFloat(service.ShippingPrice) || 0;
 
-    // Atualiza cart store com o custo efetivo (0 quando frete grátis)
     const effectiveService = qualifiesForFreeShipping
       ? { ...service, ShippingPrice: '0' }
       : service;
@@ -64,109 +84,210 @@ export function ShippingMethodSelector({ cep, onShippingReady }: ShippingMethodS
     });
   };
 
-  if (!cep || cep.replace(/\D/g, '').length < 8) {
-    return null;
-  }
+  const handleTogglePickup = () => {
+    if (mode === 'pickup') {
+      // Desmarca pickup
+      setMode('none');
+      onPickupSelected?.(false);
+      return;
+    }
+
+    selectService(null);
+    cartSetShipping(null);
+
+    setMode('pickup');
+    onPickupSelected?.(true);
+
+    onShippingReady({
+      service_name: 'Retirada no Local',
+      cost: 0,
+      delivery_days: 0,
+    });
+  };
+
+  // Label do endereço de retirada
+  const pickupLabel = pickupAddress
+    ? [pickupAddress.street, pickupAddress.number, pickupAddress.neighborhood, pickupAddress.city].filter(Boolean).join(', ')
+    : null;
+
+  const hasCep = cep && cep.replace(/\D/g, '').length >= 8;
 
   return (
     <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6 md:p-8">
-      <h3 className="text-lg font-bold uppercase tracking-wide mb-5">Frete</h3>
+      <h3 className="text-lg font-bold uppercase tracking-wide mb-5">
+        {pickupEnabled ? 'Método de envio' : 'Frete'}
+      </h3>
 
-      {loading && (
-        <div className="flex items-center justify-center py-10 text-gray-400">
-          <Loader2 size={20} className="animate-spin mr-2" />
-          <span className="text-sm">Calculando frete...</span>
-        </div>
-      )}
-
-      {error && (
-        <p className="text-sm text-red-500 py-4">{error}</p>
-      )}
-
-      {!loading && options.length > 0 && (
-        <div className="space-y-3">
-          {options
-            .filter((o) => !o.Error)
-            .map((service) => {
-              const isSelected = selectedService?.ServiceCode === service.ServiceCode;
-              const price = parseFloat(service.ShippingPrice) || 0;
-              const isFree = qualifiesForFreeShipping;
-              const Icon = service.ServiceDescription?.includes('SEDEX') ? Truck : Package;
-
-              return (
-                <motion.button
-                  key={service.ServiceCode}
-                  type="button"
-                  onClick={() => handleSelect(service)}
-                  className={`w-full text-left p-4 rounded-xl border-2 transition-all duration-200 ${
-                    isSelected ? 'shadow-sm' : 'border-gray-200 hover:border-gray-300 hover:shadow-sm'
-                  }`}
+      {/* Opção de Retirada no Local */}
+      {pickupEnabled && pickupAddress && (
+        <div className="mb-4">
+          <motion.button
+            type="button"
+            onClick={handleTogglePickup}
+            className={`w-full text-left p-4 rounded-xl border-2 transition-all duration-200 ${
+              mode === 'pickup' ? 'shadow-sm' : 'border-gray-200 hover:border-gray-300 hover:shadow-sm'
+            }`}
+            style={
+              mode === 'pickup'
+                ? { borderColor: primaryColor, backgroundColor: `${primaryColor}05` }
+                : undefined
+            }
+            whileTap={{ scale: 0.98 }}
+          >
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div
+                  className="w-10 h-10 rounded-full flex items-center justify-center transition-colors duration-200"
                   style={
-                    isSelected
-                      ? { borderColor: primaryColor, backgroundColor: `${primaryColor}05` }
-                      : undefined
+                    mode === 'pickup'
+                      ? { backgroundColor: `${primaryColor}12`, color: primaryColor }
+                      : { backgroundColor: '#f3f4f6', color: '#6b7280' }
                   }
-                  whileTap={{ scale: 0.98 }}
                 >
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-3">
-                      <div
-                        className="w-10 h-10 rounded-full flex items-center justify-center transition-colors duration-200"
-                        style={
-                          isSelected
-                            ? { backgroundColor: `${primaryColor}12`, color: primaryColor }
-                            : { backgroundColor: '#f3f4f6', color: '#6b7280' }
-                        }
-                      >
-                        <Icon size={18} />
-                      </div>
-                      <div>
-                        <span className="font-semibold text-sm">
-                          {service.ServiceDescription || service.Carrier}
-                        </span>
-                        <p className="text-xs text-gray-400 mt-0.5">
-                          {service.DeliveryTime} dias úteis
-                        </p>
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-3">
-                      <div className="text-right">
-                        {isFree ? (
-                          <>
-                            <span className="text-xs text-gray-400 line-through">
-                              {formatCurrency(price)}
-                            </span>
-                            <span className="block text-xs font-bold text-green-600 bg-green-50 px-2 py-0.5 rounded-full">
-                              Grátis
-                            </span>
-                          </>
-                        ) : (
-                          <span className="text-sm font-bold">
-                            {formatCurrency(price)}
-                          </span>
-                        )}
-                      </div>
-                      {isSelected && (
-                        <motion.div
-                          initial={{ scale: 0 }}
-                          animate={{ scale: 1 }}
-                          transition={{ type: 'spring', stiffness: 300, damping: 15 }}
-                        >
-                          <Check size={18} style={{ color: primaryColor }} />
-                        </motion.div>
-                      )}
-                    </div>
-                  </div>
-                </motion.button>
-              );
-            })}
-
-          {qualifiesForFreeShipping && (
-            <p className="text-xs text-green-600 text-center font-medium mt-2">
-              Frete grátis para compras acima de {formatCurrency(freeShippingThreshold)}
-            </p>
-          )}
+                  <MapPin size={18} />
+                </div>
+                <div>
+                  <span className="font-semibold text-sm">Retirada no Local</span>
+                  {pickupLabel && (
+                    <p className="text-xs text-gray-400 mt-0.5">{pickupLabel}</p>
+                  )}
+                </div>
+              </div>
+              <div className="flex items-center gap-3">
+                <span className="text-xs font-bold text-green-600 bg-green-50 px-2 py-0.5 rounded-full">
+                  Grátis
+                </span>
+                {mode === 'pickup' && (
+                  <motion.div
+                    initial={{ scale: 0 }}
+                    animate={{ scale: 1 }}
+                    transition={{ type: 'spring', stiffness: 300, damping: 15 }}
+                  >
+                    <Check size={18} style={{ color: primaryColor }} />
+                  </motion.div>
+                )}
+              </div>
+            </div>
+          </motion.button>
         </div>
+      )}
+
+      {/* Separador visual — só quando pickup habilitado e há algo abaixo */}
+      {pickupEnabled && pickupAddress && (
+        <div className="flex items-center gap-3 mb-4">
+          <div className="flex-1 border-t border-gray-200" />
+          <span className="text-xs text-gray-400 uppercase tracking-wide">ou receba em casa</span>
+          <div className="flex-1 border-t border-gray-200" />
+        </div>
+      )}
+
+      {/* Opções de frete (Frenet) — só aparecem quando há CEP válido */}
+      {hasCep && (
+        <>
+          {loading && (
+            <div className="flex items-center justify-center py-10 text-gray-400">
+              <Loader2 size={20} className="animate-spin mr-2" />
+              <span className="text-sm">Calculando frete...</span>
+            </div>
+          )}
+
+          {error && (
+            <p className="text-sm text-red-500 py-4">{error}</p>
+          )}
+
+          {!loading && options.length > 0 && (
+            <div className="space-y-3">
+              {options
+                .filter((o) => !o.Error)
+                .map((service) => {
+                  const isSelected = mode === 'shipping' && selectedService?.ServiceCode === service.ServiceCode;
+                  const price = parseFloat(service.ShippingPrice) || 0;
+                  const isFree = qualifiesForFreeShipping;
+                  const Icon = service.ServiceDescription?.includes('SEDEX') ? Truck : Package;
+
+                  return (
+                    <motion.button
+                      key={service.ServiceCode}
+                      type="button"
+                      onClick={() => handleSelectShipping(service)}
+                      className={`w-full text-left p-4 rounded-xl border-2 transition-all duration-200 ${
+                        isSelected ? 'shadow-sm' : 'border-gray-200 hover:border-gray-300 hover:shadow-sm'
+                      }`}
+                      style={
+                        isSelected
+                          ? { borderColor: primaryColor, backgroundColor: `${primaryColor}05` }
+                          : undefined
+                      }
+                      whileTap={{ scale: 0.98 }}
+                    >
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-3">
+                          <div
+                            className="w-10 h-10 rounded-full flex items-center justify-center transition-colors duration-200"
+                            style={
+                              isSelected
+                                ? { backgroundColor: `${primaryColor}12`, color: primaryColor }
+                                : { backgroundColor: '#f3f4f6', color: '#6b7280' }
+                            }
+                          >
+                            <Icon size={18} />
+                          </div>
+                          <div>
+                            <span className="font-semibold text-sm">
+                              {service.ServiceDescription || service.Carrier}
+                            </span>
+                            <p className="text-xs text-gray-400 mt-0.5">
+                              {service.DeliveryTime} dias úteis
+                            </p>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-3">
+                          <div className="text-right">
+                            {isFree ? (
+                              <>
+                                <span className="text-xs text-gray-400 line-through">
+                                  {formatCurrency(price)}
+                                </span>
+                                <span className="block text-xs font-bold text-green-600 bg-green-50 px-2 py-0.5 rounded-full">
+                                  Grátis
+                                </span>
+                              </>
+                            ) : (
+                              <span className="text-sm font-bold">
+                                {formatCurrency(price)}
+                              </span>
+                            )}
+                          </div>
+                          {isSelected && (
+                            <motion.div
+                              initial={{ scale: 0 }}
+                              animate={{ scale: 1 }}
+                              transition={{ type: 'spring', stiffness: 300, damping: 15 }}
+                            >
+                              <Check size={18} style={{ color: primaryColor }} />
+                            </motion.div>
+                          )}
+                        </div>
+                      </div>
+                    </motion.button>
+                  );
+                })}
+
+              {qualifiesForFreeShipping && (
+                <p className="text-xs text-green-600 text-center font-medium mt-2">
+                  Frete grátis para compras acima de {formatCurrency(freeShippingThreshold)}
+                </p>
+              )}
+            </div>
+          )}
+        </>
+      )}
+
+      {/* Dica para preencher endereço quando pickup não está selecionado e não tem CEP */}
+      {!hasCep && mode !== 'pickup' && pickupEnabled && (
+        <p className="text-xs text-gray-400 text-center py-2">
+          Preencha o endereço abaixo para ver opções de entrega
+        </p>
       )}
     </div>
   );

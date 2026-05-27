@@ -31,6 +31,7 @@ export interface ShippingAddressData {
   neighborhood: string;
   city: string;
   state: string;
+  pickup?: boolean;
 }
 
 export interface ShippingSelectionData {

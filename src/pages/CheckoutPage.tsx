@@ -1,4 +1,4 @@
-import { useEffect, useRef, useCallback } from 'react';
+import { useEffect, useRef, useCallback, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ArrowLeft } from 'lucide-react';
@@ -34,7 +34,7 @@ const stepAnimation = {
 export function CheckoutPage() {
   const navigate = useNavigate();
   const { user } = useAuth();
-  const { currentSlug } = useBrand();
+  const { currentSlug, brand } = useBrand();
   const { primaryColor } = useBrandColors();
   const { cart, clearCart, finalTotal, coupon } = useCartStore();
   const addToast = useToastStore((s) => s.addToast);
@@ -60,6 +60,11 @@ export function CheckoutPage() {
     setResult,
     resetCheckout,
   } = useCheckoutStore();
+
+  // Pickup mode — derivado do formData persistido para sobreviver a F5
+  const [isPickup, setIsPickup] = useState(
+    () => formData.shippingAddress?.pickup === true
+  );
 
   // Credit card data in ref only (never in global state)
   const creditCardRef = useRef<CreditCardData | null>(null);
@@ -116,8 +121,38 @@ export function CheckoutPage() {
     [setShippingSelection]
   );
 
+  const handlePickupSelected = useCallback(
+    (pickup: boolean) => {
+      setIsPickup(pickup);
+      if (pickup && brand?.settings?.pickupAddress) {
+        const pa = brand.settings.pickupAddress;
+        setShippingAddress({
+          recipient_name: formData.customerInfo?.name || '',
+          cep: pa.cep || '',
+          street: pa.street || '',
+          number: pa.number || '',
+          complement: pa.complement || '',
+          neighborhood: pa.neighborhood || '',
+          city: pa.city || '',
+          state: pa.state || '',
+          pickup: true,
+        });
+      } else if (!pickup) {
+        // Limpa endereço e seleção de frete — o usuário vai preencher no AddressForm
+        setShippingAddress(null as any);
+        setShippingSelection(null as any);
+      }
+    },
+    [brand?.settings?.pickupAddress, formData.customerInfo?.name, setShippingAddress, setShippingSelection]
+  );
+
   const handleDeliveryContinue = () => {
-    if (!formData.shippingAddress || !formData.shippingSelection) {
+    if (isPickup) {
+      if (!formData.shippingSelection) {
+        addToast('Selecione a opção de retirada.', 'error');
+        return;
+      }
+    } else if (!formData.shippingAddress || !formData.shippingSelection) {
       addToast('Selecione um endereço e uma opção de frete.', 'error');
       return;
     }
@@ -242,16 +277,38 @@ export function CheckoutPage() {
             {/* Step 2: Delivery */}
             {currentStep === 'delivery' && (
               <motion.div key="step-2" {...stepAnimation} className="space-y-6">
-                <AddressForm onAddressReady={handleAddressReady} />
-                <ShippingMethodSelector
-                  cep={formData.shippingAddress?.cep || addressCepRef.current}
-                  onShippingReady={handleShippingReady}
-                />
+                {brand?.settings?.pickupEnabled ? (
+                  <>
+                    {/* Pickup habilitado: seletor de método vem primeiro */}
+                    <ShippingMethodSelector
+                      cep={isPickup ? '' : (formData.shippingAddress?.cep || addressCepRef.current)}
+                      onShippingReady={handleShippingReady}
+                      onPickupSelected={handlePickupSelected}
+                      initialMode={isPickup ? 'pickup' : formData.shippingSelection ? 'shipping' : 'none'}
+                    />
+                    {/* AddressForm só aparece quando NÃO é retirada */}
+                    {!isPickup && (
+                      <AddressForm onAddressReady={handleAddressReady} />
+                    )}
+                  </>
+                ) : (
+                  <>
+                    {/* Fluxo original: endereço primeiro, frete depois */}
+                    <AddressForm onAddressReady={handleAddressReady} />
+                    <ShippingMethodSelector
+                      cep={formData.shippingAddress?.cep || addressCepRef.current}
+                      onShippingReady={handleShippingReady}
+                    />
+                  </>
+                )}
                 <motion.button
                   type="button"
                   whileTap={{ scale: 0.98 }}
                   onClick={handleDeliveryContinue}
-                  disabled={!formData.shippingAddress || !formData.shippingSelection}
+                  disabled={isPickup
+                    ? !formData.shippingSelection
+                    : !formData.shippingAddress || !formData.shippingSelection
+                  }
                   className="w-full py-3.5 rounded-xl text-white font-bold text-sm uppercase tracking-wide hover:opacity-90 transition-opacity disabled:opacity-40 disabled:cursor-not-allowed"
                   style={{ backgroundColor: primaryColor }}
                 >

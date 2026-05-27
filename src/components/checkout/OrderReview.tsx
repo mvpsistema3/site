@@ -1,5 +1,6 @@
+import type { ReactNode } from 'react';
 import { motion } from 'framer-motion';
-import { Edit3, Lock, Loader2, ShieldCheck, CreditCard, Truck } from 'lucide-react';
+import { Edit3, Lock, Loader2, ShieldCheck, CreditCard, Truck, MapPin } from 'lucide-react';
 import { useCheckoutStore } from '../../hooks/useCheckout';
 import { useCartStore } from '../../stores/cartStore';
 import { useBrandColors } from '../../hooks/useTheme';
@@ -29,6 +30,7 @@ export function OrderReview({ onSubmit }: OrderReviewProps) {
   const customer = formData.customerInfo;
   const address = formData.shippingAddress;
   const shipping = formData.shippingSelection;
+  const isPickup = address?.pickup === true;
   const paymentLabel = formData.paymentMethod === 'pix' ? 'PIX' : 'Cartão de Crédito';
   const installmentsLabel =
     formData.paymentMethod === 'credit_card' && formData.installments > 1
@@ -61,44 +63,76 @@ export function OrderReview({ onSubmit }: OrderReviewProps) {
         </Section>
       </motion.div>
 
-      {/* Address */}
+      {/* Address / Pickup */}
       <motion.div custom={1} variants={sectionVariants} initial="hidden" animate="visible">
         <Section
-          title="Endereço de entrega"
+          title={isPickup ? 'Retirada no local' : 'Endereço de entrega'}
           onEdit={() => handleEditSection('delivery')}
           primaryColor={primaryColor}
         >
-          <p className="text-sm">
-            {address?.street}, {address?.number}
-            {address?.complement ? ` - ${address.complement}` : ''}
-          </p>
-          <p className="text-sm text-gray-500">
-            {address?.neighborhood} — {address?.city}/{address?.state}
-          </p>
-          <p className="text-sm text-gray-500">CEP: {address?.cep}</p>
+          {isPickup ? (
+            <>
+              <div className="flex items-center gap-2">
+                <MapPin size={14} className="text-gray-400" />
+                <p className="text-sm font-medium">Retirada no Local</p>
+              </div>
+              <p className="text-sm text-gray-500 mt-0.5">
+                {address?.street}, {address?.number}
+                {address?.complement ? ` - ${address.complement}` : ''}
+              </p>
+              <p className="text-sm text-gray-500">
+                {address?.neighborhood} — {address?.city}/{address?.state}
+              </p>
+            </>
+          ) : (
+            <>
+              <p className="text-sm">
+                {address?.street}, {address?.number}
+                {address?.complement ? ` - ${address.complement}` : ''}
+              </p>
+              <p className="text-sm text-gray-500">
+                {address?.neighborhood} — {address?.city}/{address?.state}
+              </p>
+              <p className="text-sm text-gray-500">CEP: {address?.cep}</p>
+            </>
+          )}
         </Section>
       </motion.div>
 
       {/* Shipping */}
       <motion.div custom={2} variants={sectionVariants} initial="hidden" animate="visible">
         <Section
-          title="Frete"
+          title={isPickup ? 'Envio' : 'Frete'}
           onEdit={() => handleEditSection('delivery')}
           primaryColor={primaryColor}
         >
-          <div className="flex items-center gap-2">
-            <Truck size={14} className="text-gray-400" />
-            <p className="text-sm">
-              {shipping?.service_name} — {shipping?.delivery_days} dias úteis
-            </p>
-          </div>
-          <p className="text-sm font-semibold mt-1">
-            {shipping?.cost === 0 ? (
-              <span className="text-green-600">Grátis</span>
-            ) : (
-              formatCurrency(shipping?.cost || 0)
-            )}
-          </p>
+          {isPickup ? (
+            <>
+              <div className="flex items-center gap-2">
+                <MapPin size={14} className="text-gray-400" />
+                <p className="text-sm">Retirada no Local</p>
+              </div>
+              <p className="text-sm font-semibold mt-1">
+                <span className="text-green-600">Grátis</span>
+              </p>
+            </>
+          ) : (
+            <>
+              <div className="flex items-center gap-2">
+                <Truck size={14} className="text-gray-400" />
+                <p className="text-sm">
+                  {shipping?.service_name} — {shipping?.delivery_days} dias úteis
+                </p>
+              </div>
+              <p className="text-sm font-semibold mt-1">
+                {shipping?.cost === 0 ? (
+                  <span className="text-green-600">Grátis</span>
+                ) : (
+                  formatCurrency(shipping?.cost || 0)
+                )}
+              </p>
+            </>
+          )}
         </Section>
       </motion.div>
 
@@ -263,7 +297,7 @@ function Section({
   title: string;
   onEdit: () => void;
   primaryColor: string;
-  children: React.ReactNode;
+  children: ReactNode;
 }) {
   return (
     <div
