@@ -199,6 +199,10 @@ export function useFeaturedProducts() {
         .eq('featured', true)
         .eq('active', true)
         .eq('brand_id', brand.id) // SEMPRE filtrar por marca
+        // Ordem estável (S6): sem .order() o Postgres reordena ao editar estoque/variante.
+        // created_at não muda em edições; id como desempate determinístico.
+        .order('created_at', { ascending: false })
+        .order('id', { ascending: true })
         .limit(8);
 
       if (error) throw error;

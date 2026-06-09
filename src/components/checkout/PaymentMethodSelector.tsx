@@ -25,7 +25,7 @@ const METHODS: Array<{
   {
     key: 'credit_card',
     label: 'Cartão de Crédito',
-    description: 'Parcele em até 12x sem juros',
+    description: 'Até 3x sem juros • em até 12x',
     icon: CreditCard,
   },
 ];

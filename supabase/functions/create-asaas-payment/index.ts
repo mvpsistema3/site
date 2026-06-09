@@ -4,6 +4,7 @@ import { getCorsHeaders } from "../_shared/cors.ts";
 import { checkRateLimit, getClientIp, rateLimitResponse } from "../_shared/rate-limit.ts";
 import { findOrCreateCustomer, createPayment, getPixQrCode } from "../_shared/asaas-client.ts";
 import { validateCPF, sanitize, validateItems, validatePaymentMethod, formatDateForAsaas } from "../_shared/validation.ts";
+import { chargeTotalForInstallments } from "../_shared/installments.ts";
 
 /**
  * Edge Function: create-asaas-payment
@@ -330,6 +331,17 @@ Deno.serve(async (req: Request) => {
 
     console.log(`Order: subtotal=${subtotal}, shipping=${effectiveShipping}, discount=${discount}, total=${total}`);
 
+    // ── S13/A1: grossing-up do parcelamento no cartão ───────────────────────
+    // PIX e 1x–3x no cartão: cobra o total base (loja absorve). 4x–12x: total com a
+    // taxa fixa repassada — é esse valor (chargeTotal) que vai ao Asaas e ao pedido.
+    const chargeTotal = payment.method === "credit_card"
+      ? chargeTotalForInstallments(total, installments)
+      : total;
+    const installmentFee = Number((chargeTotal - total).toFixed(2));
+    if (installmentFee > 0) {
+      console.log(`Installments ${installments}x: base=${total}, charge=${chargeTotal}, fee=${installmentFee}`);
+    }
+
     // ════════════════════════════════════════════════════════════════════
     // STEP 6: FIND OR CREATE CUSTOMER IN ASAAS
     // ════════════════════════════════════════════════════════════════════
@@ -360,7 +372,7 @@ Deno.serve(async (req: Request) => {
         p_subtotal: subtotal,
         p_shipping_cost: effectiveShipping,
         p_discount: discount,
-        p_total: total,
+        p_total: chargeTotal,
         p_coupon_code: couponCodeUsed,
         p_discount_amount: discount,
         p_payment_method: payment.method,
@@ -403,7 +415,7 @@ Deno.serve(async (req: Request) => {
       const paymentParams: any = {
         customer: asaasCustomerId,
         billingType: payment.method === "pix" ? "PIX" : "CREDIT_CARD",
-        value: total,
+        value: chargeTotal,
         dueDate: formatDateForAsaas(dueDate),
         description: `Pedido #${order.order_number} — ${brand.name}`,
         externalReference: order.id,
@@ -411,8 +423,9 @@ Deno.serve(async (req: Request) => {
 
       if (payment.method === "credit_card") {
         if (installments >= 2) {
+          // Envia o total parcelado; o Asaas divide e ajusta o resíduo na última parcela.
           paymentParams.installmentCount = installments;
-          paymentParams.installmentValue = Number((total / installments).toFixed(2));
+          paymentParams.totalValue = chargeTotal;
         }
 
         if (payment.credit_card) {
@@ -453,6 +466,12 @@ Deno.serve(async (req: Request) => {
       asaas_billing_type: asaasPayment.billingType,
       asaas_status: asaasPayment.status,
     };
+
+    // Registra a taxa de parcelamento repassada (4x–12x) para conferência/relatórios.
+    if (installmentFee > 0) {
+      paymentMetadata.base_total = total;
+      paymentMetadata.installment_fee = installmentFee;
+    }
 
     // For PIX: get QR code
     let pixData: AsaasPixQrCode | null = null;

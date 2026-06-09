@@ -763,7 +763,7 @@ const CartDrawer = () => {
                 </div>
                 <div className="text-center">
                   <CreditCard size={16} className="mx-auto mb-0.5 text-purple-600" strokeWidth={2} />
-                  <p className="text-xs text-gray-600">12x s/ juros</p>
+                  <p className="text-xs text-gray-600">Parcele em 12x</p>
                 </div>
               </div>
             </div>
@@ -1371,8 +1371,15 @@ const Footer = () => {
     { Icon: Twitter, label: 'Twitter', href: socialConfig.twitter || '#' },
   ].filter(s => s.href !== '#');
 
+  // Cor do footer configurável via tema (S8 / ADM A8); fallback ao gradiente escuro atual.
+  const footerColor = (brand?.theme as Record<string, any>)?.footerColor
+    || (brandConfig.theme as Record<string, any>)?.footerColor;
+
   return (
-    <footer className="relative bg-gradient-to-b from-gray-900 via-black to-black text-white overflow-hidden">
+    <footer
+      className={`relative text-white overflow-hidden ${footerColor ? '' : 'bg-gradient-to-b from-gray-900 via-black to-black'}`}
+      style={footerColor ? { backgroundColor: footerColor } : undefined}
+    >
       {/* Grain texture overlay */}
       <div className="absolute inset-0 bg-noise opacity-[0.03] pointer-events-none" />
 
@@ -1829,7 +1836,7 @@ const CartPage = () => {
                     <span className="text-xl font-bold tracking-tight">Total</span>
                     <span className="text-2xl font-bold tracking-tight">R$ {total.toFixed(2)}</span>
                   </div>
-                  <p className="text-xs text-gray-500 text-right">Em até 12x sem juros</p>
+                  <p className="text-xs text-gray-500 text-right">Até 3x sem juros • em até 12x no cartão</p>
                 </div>
               </div>
 
@@ -1869,7 +1876,7 @@ const CartPage = () => {
               </div>
               <div className="bg-white rounded-lg border border-gray-200 p-3">
                 <CreditCard size={24} className="mx-auto mb-1 text-purple-600" strokeWidth={1.5} />
-                <p className="text-xs text-gray-600 leading-tight">Até 12x s/ juros</p>
+                <p className="text-xs text-gray-600 leading-tight">Parcele em até 12x</p>
               </div>
             </div>
           </div>

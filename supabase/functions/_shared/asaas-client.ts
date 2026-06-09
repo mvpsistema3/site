@@ -46,6 +46,7 @@ interface CreatePaymentParams {
   externalReference: string;
   installmentCount?: number;
   installmentValue?: number;
+  totalValue?: number;
   creditCard?: {
     holderName: string;
     number: string;
@@ -195,9 +196,14 @@ export async function createPayment(params: CreatePaymentParams): Promise<AsaasP
     payload.value = params.value;
   } else if (params.billingType === "CREDIT_CARD") {
     if (params.installmentCount && params.installmentCount >= 2) {
-      // Installments: send installmentCount + installmentValue (NOT value)
+      // Installments: send installmentCount + totalValue (Asaas divide e ajusta o resíduo).
+      // Fallback para installmentValue se o total não vier (compat).
       payload.installmentCount = params.installmentCount;
-      payload.installmentValue = params.installmentValue;
+      if (params.totalValue != null) {
+        payload.totalValue = params.totalValue;
+      } else {
+        payload.installmentValue = params.installmentValue;
+      }
     } else {
       // Single payment: send value only (NO installmentCount)
       payload.value = params.value;

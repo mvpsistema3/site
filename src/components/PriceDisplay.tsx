@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { ChevronDown, CreditCard } from 'lucide-react';
 import { useBrand } from '../contexts/BrandContext';
+import { calcularParcelamento, maxSemJuros } from '../lib/installments';
 
 interface PriceDisplayProps {
   price: number;
@@ -33,15 +34,11 @@ export const PriceDisplay: React.FC<PriceDisplayProps> = ({
     }).format(value);
   };
 
-  // Gera array de parcelas
-  const installments = Array.from({ length: maxInstallments }, (_, i) => {
-    const n = i + 1;
-    return {
-      parcelas: n,
-      valor: price / n,
-      total: price,
-    };
-  });
+  // Parcelamento real (S13/A1): 1x–3x sem juros, 4x–12x com taxa fixa repassada
+  const installments = calcularParcelamento(price, maxInstallments);
+  const semJurosN = maxSemJuros(maxInstallments);
+  const semJurosOpt = installments[semJurosN - 1];
+  const maxOpt = installments[installments.length - 1];
 
   return (
     <div className="space-y-3">
@@ -77,11 +74,15 @@ export const PriceDisplay: React.FC<PriceDisplayProps> = ({
       {/* Parcelamento */}
       {showInstallments && (
         <div className="space-y-2">
-          <div className="flex items-center gap-2 text-gray-600">
-            <CreditCard size={16} />
+          <div className="flex items-start gap-2 text-gray-600">
+            <CreditCard size={16} className="mt-0.5 flex-shrink-0" />
             <span className="text-sm">
-              ou <strong>{maxInstallments}x</strong> de{' '}
-              <strong>{formatCurrency(price / maxInstallments)}</strong> sem juros
+              até <strong>{semJurosN}x de {formatCurrency(semJurosOpt.valorParcela)}</strong> sem juros
+              {maxInstallments > semJurosN && (
+                <>
+                  {' '}ou <strong>{maxOpt.parcelas}x de {formatCurrency(maxOpt.valorParcela)}</strong>
+                </>
+              )}
             </span>
           </div>
 
@@ -118,23 +119,23 @@ export const PriceDisplay: React.FC<PriceDisplayProps> = ({
                       </h4>
                     </div>
                     <div className="max-h-64 overflow-y-auto p-2">
-                      {installments.map(({ parcelas, valor }) => (
+                      {installments.map(({ parcelas, valorParcela, total, semJuros }) => (
                         <div
                           key={parcelas}
                           className="flex justify-between items-center py-2 px-3 hover:bg-gray-50 rounded text-sm"
                         >
                           <span className="text-gray-600">
-                            {parcelas}x sem juros
+                            {parcelas}x {semJuros ? 'sem juros' : `(total ${formatCurrency(total)})`}
                           </span>
                           <span className="font-medium text-gray-900">
-                            {formatCurrency(valor)}
+                            {formatCurrency(valorParcela)}
                           </span>
                         </div>
                       ))}
                     </div>
                     <div className="p-3 border-t bg-gray-50 rounded-b-lg">
                       <p className="text-xs text-gray-500 text-center">
-                        Parcelas sem juros no cartão de crédito
+                        Até {semJurosN}x sem juros • demais parcelas com taxa no cartão
                       </p>
                     </div>
                   </div>

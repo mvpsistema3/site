@@ -2,6 +2,7 @@ import { ChevronDown } from 'lucide-react';
 import { useBrand } from '../../contexts/BrandContext';
 import { useBrandColors } from '../../hooks/useTheme';
 import { formatCurrency } from '../../lib/currency.utils';
+import { calcularParcelamento } from '../../lib/installments';
 
 interface InstallmentSelectorProps {
   totalAmount: number;
@@ -18,18 +19,16 @@ export function InstallmentSelector({
   const { primaryColor } = useBrandColors();
   const maxInstallments = brandConfig?.settings?.maxInstallments || 12;
 
-  const options = Array.from({ length: maxInstallments }, (_, i) => {
-    const count = i + 1;
-    const value = totalAmount / count;
-    return {
-      count,
-      value,
-      label:
-        count === 1
-          ? `1x de ${formatCurrency(totalAmount)} (à vista)`
-          : `${count}x de ${formatCurrency(value)} sem juros`,
-    };
-  });
+  // Parcelamento real (S13/A1): 1x–3x sem juros, 4x–12x com taxa fixa repassada
+  const options = calcularParcelamento(totalAmount, maxInstallments).map((opt) => ({
+    count: opt.parcelas,
+    label:
+      opt.parcelas === 1
+        ? `1x de ${formatCurrency(opt.total)} (à vista)`
+        : opt.semJuros
+          ? `${opt.parcelas}x de ${formatCurrency(opt.valorParcela)} sem juros`
+          : `${opt.parcelas}x de ${formatCurrency(opt.valorParcela)} — total ${formatCurrency(opt.total)}`,
+  }));
 
   return (
     <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6 md:p-8">

@@ -5,6 +5,7 @@ import { useCheckoutStore } from '../../hooks/useCheckout';
 import { useCartStore } from '../../stores/cartStore';
 import { useBrandColors } from '../../hooks/useTheme';
 import { formatCurrency } from '../../lib/currency.utils';
+import { calcularParcela } from '../../lib/installments';
 import { formatCPF } from '../../lib/cpf';
 import { formatPhone } from '../../lib/utils';
 import type { CheckoutStep } from '../../types/checkout.types';
@@ -32,9 +33,14 @@ export function OrderReview({ onSubmit }: OrderReviewProps) {
   const shipping = formData.shippingSelection;
   const isPickup = address?.pickup === true;
   const paymentLabel = formData.paymentMethod === 'pix' ? 'PIX' : 'Cartão de Crédito';
+  // Parcelamento real (S13/A1): 4x–12x no cartão acrescentam a taxa fixa repassada.
+  const isCard = formData.paymentMethod === 'credit_card';
+  const installmentInfo = isCard ? calcularParcela(finalTotal, formData.installments) : null;
+  const chargeTotal = installmentInfo ? installmentInfo.total : finalTotal;
+  const cardFee = Number((chargeTotal - finalTotal).toFixed(2));
   const installmentsLabel =
-    formData.paymentMethod === 'credit_card' && formData.installments > 1
-      ? `${formData.installments}x de ${formatCurrency(finalTotal / formData.installments)}`
+    isCard && formData.installments > 1
+      ? `${formData.installments}x de ${formatCurrency(installmentInfo!.valorParcela)}`
       : null;
 
   const handleEditSection = (step: CheckoutStep) => {
@@ -206,13 +212,19 @@ export function OrderReview({ onSubmit }: OrderReviewProps) {
               )}
             </span>
           </div>
+          {cardFee > 0 && (
+            <div className="flex justify-between text-sm">
+              <span className="text-gray-500">Taxa de parcelamento ({formData.installments}x)</span>
+              <span>{formatCurrency(cardFee)}</span>
+            </div>
+          )}
           <div className="border-t pt-3 mt-3 flex justify-between items-center">
             <span className="font-bold text-base">Total</span>
             <span
               className="font-bold text-lg px-3 py-1 rounded-lg"
               style={{ backgroundColor: `${primaryColor}08`, color: primaryColor }}
             >
-              {formatCurrency(finalTotal)}
+              {formatCurrency(chargeTotal)}
             </span>
           </div>
         </div>
