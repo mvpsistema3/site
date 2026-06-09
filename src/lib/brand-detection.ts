@@ -47,8 +47,8 @@ export const detectBrandFromHostname = (): string => {
     return DEFAULT_BRAND;
   }
 
-  // Produção - detecta pela URL
-  if (hostname.includes('seshstore.com.br')) {
+  // Produção - detecta pela URL (sesh.com.br é o domínio atual; seshstore.com.br é legado)
+  if (hostname.includes('sesh.com.br') || hostname.includes('seshstore.com.br')) {
     return 'sesh';
   }
 

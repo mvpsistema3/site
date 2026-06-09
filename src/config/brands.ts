@@ -43,7 +43,7 @@ export const BRAND_CONFIGS: Record<string, BrandConfig> = {
   sesh: {
     slug: 'sesh',
     name: 'Sesh Store',
-    domain: 'seshstore.com.br',
+    domain: 'sesh.com.br',
     theme: {
       primaryColor: '#41BAC2',
       secondaryColor: '#000000',
