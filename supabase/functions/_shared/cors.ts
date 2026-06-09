@@ -4,6 +4,8 @@
  */
 
 const ALLOWED_ORIGINS = [
+  'https://sesh.com.br',
+  'https://www.sesh.com.br',
   'https://seshstore.com.br',
   'https://www.seshstore.com.br',
   'https://grupogot.com',
