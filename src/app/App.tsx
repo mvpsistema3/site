@@ -539,6 +539,15 @@ const FAQSection = () => {
           ))}
         </div>
 
+        <div className="mt-8 text-center">
+          <BrandLink
+            to="/faq"
+            className="text-sm font-bold uppercase tracking-wider underline underline-offset-4 hover:opacity-60 transition-opacity"
+          >
+            Ver todas as perguntas
+          </BrandLink>
+        </div>
+
         {whatsappUrl && (
           <div className="mt-10 text-center">
             <p className="text-sm text-gray-500 mb-4">Ainda tem dúvidas?</p>

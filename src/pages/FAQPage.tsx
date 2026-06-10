@@ -6,7 +6,6 @@ import { useFAQs, type FAQ } from '../hooks/useFAQs';
 import { useBrandColors } from '../hooks/useTheme';
 import { useBrand } from '../contexts/BrandContext';
 import { SEOHead } from '../components/SEOHead';
-import { BrandLink } from '../components/BrandLink';
 
 // Skeleton for loading state
 function FAQSkeleton() {
@@ -217,12 +216,14 @@ export function FAQPage() {
         {/* CTA */}
         <div className="mt-12 text-center border-t border-gray-100 pt-10">
           <p className="text-sm text-gray-500 mb-4">Não encontrou o que procurava?</p>
-          <BrandLink
-            to="/page/fale-conosco"
+          <a
+            href={`https://wa.me/5521989041735?text=${encodeURIComponent('Olá! Tenho uma dúvida.')}`}
+            target="_blank"
+            rel="noopener noreferrer"
             className="inline-flex items-center gap-2 px-6 py-3 border-2 border-black rounded font-bold text-sm uppercase tracking-wider hover:bg-black hover:text-white transition-colors"
           >
             Fale Conosco <ArrowRight size={16} />
-          </BrandLink>
+          </a>
         </div>
       </div>
     </div>
