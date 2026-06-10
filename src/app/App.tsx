@@ -477,7 +477,14 @@ const ProductCard: React.FC<ProductCardProps> = ({ product }) => {
 const FAQSection = () => {
   const [openIndex, setOpenIndex] = useState<number | null>(null);
   const { primaryColor } = useBrandColors();
+  const { brand } = useBrand();
   const { data: faqs, isLoading } = useFAQsByCategory('geral');
+
+  // WhatsApp da marca (S9): só exibe o botão quando há número configurado — sem hardcode incorreto.
+  const whatsappNumber = (brand?.settings as Record<string, any>)?.contact?.whatsapp;
+  const whatsappUrl = whatsappNumber
+    ? `https://wa.me/${String(whatsappNumber).replace(/\D/g, '')}?text=${encodeURIComponent('Olá! Tenho uma dúvida.')}`
+    : null;
 
   const toggle = (index: number) => {
     setOpenIndex(openIndex === index ? null : index);
@@ -531,12 +538,18 @@ const FAQSection = () => {
           ))}
         </div>
 
-        <div className="mt-10 text-center">
-          <p className="text-sm text-gray-500 mb-4">Ainda tem dúvidas?</p>
-          <Button variant="outline" className="gap-2 mx-auto">
-             <HelpCircle size={16} /> FALE NO WHATSAPP
-          </Button>
-        </div>
+        {whatsappUrl && (
+          <div className="mt-10 text-center">
+            <p className="text-sm text-gray-500 mb-4">Ainda tem dúvidas?</p>
+            <Button
+              variant="outline"
+              className="gap-2 mx-auto"
+              onClick={() => window.open(whatsappUrl, '_blank', 'noopener,noreferrer')}
+            >
+              <HelpCircle size={16} /> FALE NO WHATSAPP
+            </Button>
+          </div>
+        )}
       </div>
     </section>
   );
@@ -3569,13 +3582,6 @@ const ProductDetailPage = () => {
               </div>
             )}
 
-            {/* Sem variantes */}
-            {variants.length === 0 && (
-              <div className="text-sm p-4 bg-gray-50 rounded-lg border border-gray-100">
-                <p className="font-medium text-gray-700 mb-1">Produto sem variantes</p>
-                <p className="text-xs text-gray-400">Adicione variantes no painel administrativo.</p>
-              </div>
-            )}
 
             {/* Sem estoque */}
             {variants.length > 0 && !hasAnyStock() && (
