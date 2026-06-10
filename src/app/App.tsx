@@ -3097,10 +3097,15 @@ const ProductDetailPage = () => {
   const dim1Hex = { ...colorHexMap, ...dim1HexFromDims };
   const dim2Hex = { ...sizeHexMap, ...dim2HexFromDims };
 
-  // Definir cor padrão
+  // Definir variante padrão — prefere a primeira COM estoque (não cair numa esgotada)
   useEffect(() => {
     if (colors.length > 0 && !selectedColor) {
-      setSelectedColor(colors[0]);
+      const firstInStock = colors.find((c: string) =>
+        sizes.length === 0
+          ? getVariantStock(c, '') > 0
+          : sizes.some((s: string) => getVariantStock(c, s) > 0)
+      );
+      setSelectedColor(firstInStock || colors[0]);
     }
   }, [colors, selectedColor]);
 
@@ -3467,7 +3472,7 @@ const ProductDetailPage = () => {
                             ? 'ring-2 ring-offset-2 scale-110 shadow-sm'
                             : hasStock
                               ? 'ring-1 ring-gray-200 hover:ring-gray-400 hover:scale-105'
-                              : 'ring-1 ring-gray-100 opacity-30 cursor-not-allowed'
+                              : 'ring-1 ring-gray-100 opacity-30 cursor-not-allowed pointer-events-none'
                         }`}
                         style={{ background: dim1Hex[color] || color }}
                         title={`${color}${!hasStock ? ' (Sem estoque)' : ''}`}
@@ -3491,7 +3496,7 @@ const ProductDetailPage = () => {
                         disabled={!hasStock}
                         className={`min-w-[42px] h-10 px-3 flex items-center justify-center font-semibold text-sm rounded-lg border transition-all duration-200 ${
                           !hasStock
-                            ? 'bg-gray-50 text-gray-300 border-gray-100 cursor-not-allowed line-through'
+                            ? 'bg-gray-50 text-gray-300 border-gray-100 cursor-not-allowed line-through pointer-events-none'
                             : selectedColor === color
                             ? 'text-white border-transparent shadow-sm'
                             : 'bg-white text-gray-800 border-gray-200 hover:border-gray-800'
@@ -3538,7 +3543,7 @@ const ProductDetailPage = () => {
                             ? 'ring-2 ring-offset-2 scale-110 shadow-sm'
                             : !isOutOfStock
                               ? 'ring-1 ring-gray-200 hover:ring-gray-400 hover:scale-105'
-                              : 'ring-1 ring-gray-100 opacity-30 cursor-not-allowed'
+                              : 'ring-1 ring-gray-100 opacity-30 cursor-not-allowed pointer-events-none'
                         }`}
                         style={{ background: dim2Hex[size] || size }}
                         title={`${size}${isOutOfStock ? ' (Sem estoque)' : ''}`}
@@ -3561,7 +3566,7 @@ const ProductDetailPage = () => {
                         disabled={isOutOfStock}
                         className={`min-w-[42px] h-10 px-3 flex items-center justify-center font-semibold text-sm rounded-lg border transition-all duration-200 ${
                           isOutOfStock
-                            ? 'bg-gray-50 text-gray-300 border-gray-100 cursor-not-allowed line-through'
+                            ? 'bg-gray-50 text-gray-300 border-gray-100 cursor-not-allowed line-through pointer-events-none'
                             : selectedSize === size
                             ? 'text-white border-transparent shadow-sm'
                             : showError && !selectedSize
