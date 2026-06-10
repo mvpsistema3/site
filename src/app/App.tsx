@@ -39,6 +39,7 @@ import { ShippingCalculator } from '../components/ShippingCalculator';
 import { SearchPreview } from '../components/SearchPreview';
 import { CouponInput } from '../components/CouponInput';
 import { PriceDisplay } from '../components/PriceDisplay';
+import { VariantChip } from '../components/VariantChip';
 import { StockWarning } from '../components/StockWarning';
 import { FreeShippingBanner } from '../components/FreeShippingBanner';
 import { FreeShippingProgress } from '../components/FreeShippingProgress';
@@ -3453,58 +3454,26 @@ const ProductDetailPage = () => {
                 </p>
                 <div className="flex flex-wrap gap-2.5">
                   {colors.map((color: string) => {
-                    const hasStock = sizes.length === 0
+                    const inStock = sizes.length === 0
                       ? getVariantStock(color, '') > 0
-                      : sizes.some(size => getVariantStock(color, size) > 0);
-
-                    return dim1Type === 'color' ? (
-                      <button
+                      : sizes.some((size) => getVariantStock(color, size) > 0);
+                    return (
+                      <VariantChip
                         key={color}
-                        onClick={() => {
-                          if (!hasStock) return;
+                        label={color}
+                        swatch={dim1Hex[color]}
+                        isColor={dim1Type === 'color'}
+                        selected={selectedColor === color}
+                        outOfStock={!inStock}
+                        primaryColor={primaryColor}
+                        onSelect={() => {
                           setSelectedColor(color);
+                          // Se o tamanho já escolhido ficou esgotado nessa cor, limpa a seleção.
                           if (selectedSize && getVariantStock(color, selectedSize) <= 0) {
                             setSelectedSize('');
                           }
                         }}
-                        className={`w-8 h-8 rounded-full transition-all duration-200 relative flex-shrink-0 ${
-                          selectedColor === color
-                            ? 'ring-2 ring-offset-2 scale-110 shadow-sm'
-                            : hasStock
-                              ? 'ring-1 ring-gray-200 hover:ring-gray-400 hover:scale-105'
-                              : 'ring-1 ring-gray-100 opacity-30 cursor-not-allowed pointer-events-none'
-                        }`}
-                        style={{ background: dim1Hex[color] || color }}
-                        title={`${color}${!hasStock ? ' (Sem estoque)' : ''}`}
-                      >
-                        {!hasStock && (
-                          <div className="absolute inset-0 rounded-full overflow-hidden flex items-center justify-center">
-                            <div className="w-[130%] h-px bg-red-400 rotate-45 absolute"></div>
-                          </div>
-                        )}
-                      </button>
-                    ) : (
-                      <button
-                        key={color}
-                        onClick={() => {
-                          if (!hasStock) return;
-                          setSelectedColor(color);
-                          if (selectedSize && getVariantStock(color, selectedSize) <= 0) {
-                            setSelectedSize('');
-                          }
-                        }}
-                        disabled={!hasStock}
-                        className={`min-w-[42px] h-10 px-3 flex items-center justify-center font-semibold text-sm rounded-lg border transition-all duration-200 ${
-                          !hasStock
-                            ? 'bg-gray-50 text-gray-300 border-gray-100 cursor-not-allowed line-through pointer-events-none'
-                            : selectedColor === color
-                            ? 'text-white border-transparent shadow-sm'
-                            : 'bg-white text-gray-800 border-gray-200 hover:border-gray-800'
-                        }`}
-                        style={selectedColor === color && hasStock ? { backgroundColor: primaryColor, borderColor: primaryColor } : {}}
-                      >
-                        {color}
-                      </button>
+                      />
                     );
                   })}
                 </div>
@@ -3526,57 +3495,21 @@ const ProductDetailPage = () => {
                 </div>
                 <div className="flex flex-wrap gap-2">
                   {sizes.map((size: string) => {
-                    const stock = getVariantStock(selectedColor, size);
-                    const isOutOfStock = stock <= 0;
-
-                    return dim2Type === 'color' ? (
-                      <button
+                    const inStock = getVariantStock(selectedColor, size) > 0;
+                    return (
+                      <VariantChip
                         key={size}
-                        onClick={() => {
-                          if (!isOutOfStock) {
-                            setSelectedSize(size);
-                            setShowError(false);
-                          }
+                        label={size}
+                        swatch={dim2Hex[size]}
+                        isColor={dim2Type === 'color'}
+                        selected={selectedSize === size}
+                        outOfStock={!inStock}
+                        primaryColor={primaryColor}
+                        onSelect={() => {
+                          setSelectedSize(size);
+                          setShowError(false);
                         }}
-                        className={`w-8 h-8 rounded-full transition-all duration-200 relative flex-shrink-0 ${
-                          selectedSize === size
-                            ? 'ring-2 ring-offset-2 scale-110 shadow-sm'
-                            : !isOutOfStock
-                              ? 'ring-1 ring-gray-200 hover:ring-gray-400 hover:scale-105'
-                              : 'ring-1 ring-gray-100 opacity-30 cursor-not-allowed pointer-events-none'
-                        }`}
-                        style={{ background: dim2Hex[size] || size }}
-                        title={`${size}${isOutOfStock ? ' (Sem estoque)' : ''}`}
-                      >
-                        {isOutOfStock && (
-                          <div className="absolute inset-0 rounded-full overflow-hidden flex items-center justify-center">
-                            <div className="w-[130%] h-px bg-red-400 rotate-45 absolute"></div>
-                          </div>
-                        )}
-                      </button>
-                    ) : (
-                      <button
-                        key={size}
-                        onClick={() => {
-                          if (!isOutOfStock) {
-                            setSelectedSize(size);
-                            setShowError(false);
-                          }
-                        }}
-                        disabled={isOutOfStock}
-                        className={`min-w-[42px] h-10 px-3 flex items-center justify-center font-semibold text-sm rounded-lg border transition-all duration-200 ${
-                          isOutOfStock
-                            ? 'bg-gray-50 text-gray-300 border-gray-100 cursor-not-allowed line-through pointer-events-none'
-                            : selectedSize === size
-                            ? 'text-white border-transparent shadow-sm'
-                            : showError && !selectedSize
-                            ? 'border-red-300 bg-red-50 text-red-500'
-                            : 'bg-white text-gray-800 border-gray-200 hover:border-gray-800'
-                        }`}
-                        style={selectedSize === size && !isOutOfStock ? { backgroundColor: primaryColor, borderColor: primaryColor } : {}}
-                      >
-                        {size}
-                      </button>
+                      />
                     );
                   })}
                 </div>
