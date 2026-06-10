@@ -162,7 +162,7 @@ export const VariantSelector: React.FC<VariantSelectorProps> = ({
                     }
                     ${!isAvailable ? 'opacity-30 cursor-not-allowed' : 'cursor-pointer'}
                   `}
-                  title={`${colorNames[color] || color}${!isAvailable ? ' (Indisponível)' : ''}`}
+                  title={`${colorNames[color] || color}${!isAvailable ? ' (Esgotado)' : ''}`}
                 >
                   <div
                     className="w-full h-full rounded-full"
@@ -252,7 +252,7 @@ export const VariantSelector: React.FC<VariantSelectorProps> = ({
                     }
                     ${!isAvailable ? 'opacity-30 cursor-not-allowed line-through' : 'cursor-pointer'}
                   `}
-                  title={!isAvailable ? 'Tamanho indisponível' : ''}
+                  title={!isAvailable ? 'Tamanho esgotado' : ''}
                 >
                   {size}
                   {showStockIndicator && isAvailable && selectedColor && stock <= 10 && (

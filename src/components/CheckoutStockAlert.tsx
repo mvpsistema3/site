@@ -55,7 +55,7 @@ export function CheckoutStockAlert({ items, onContinue, onGoBack }: CheckoutStoc
           {insufficientStockItems.length > 0 && (
             <div className="mb-3">
               <p className="text-orange-700 font-medium mb-1">
-                Quantidade indisponível:
+                Estoque insuficiente:
               </p>
               <ul className="space-y-1">
                 {insufficientStockItems.map(item => (

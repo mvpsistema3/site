@@ -3160,13 +3160,14 @@ const ProductDetailPage = () => {
 
   // Verificar se há algum estoque disponível no produto
   const hasAnyStock = () => {
-    if (variants.length === 0) return true; // Se não há variantes, assume que tem estoque
+    // Sem variantes = sem estoque (estoque só existe em variante) → produto esgotado.
+    if (variants.length === 0) return false;
     return variants.some((v: any) => v.stock > 0);
   };
 
   // Verificar se a combinação selecionada tem estoque
   const isCurrentSelectionInStock = () => {
-    if (variants.length === 0) return true;
+    if (variants.length === 0) return false;
 
     // Se precisa de ambos (cor e tamanho)
     if (sizes.length > 0 && colors.length > 0) {
@@ -3207,7 +3208,12 @@ const ProductDetailPage = () => {
       return;
     }
 
-    // Verificar estoque
+    // Produto esgotado (sem variante OU todas as variantes sem estoque) — bloquear
+    if (!hasAnyStock()) {
+      return;
+    }
+
+    // Verificar estoque da variante selecionada
     if (variants.length > 0) {
       const stock = getVariantStock(selectedColor, selectedSize);
       if (stock <= 0) {
@@ -3584,10 +3590,10 @@ const ProductDetailPage = () => {
 
 
             {/* Sem estoque */}
-            {variants.length > 0 && !hasAnyStock() && (
+            {!hasAnyStock() && (
               <div className="text-sm p-4 bg-red-50 rounded-lg border border-red-100">
-                <p className="font-medium text-red-700 mb-1">Produto Indisponível</p>
-                <p className="text-xs text-red-500">Temporariamente sem estoque.</p>
+                <p className="font-medium text-red-700 mb-1">Produto esgotado</p>
+                <p className="text-xs text-red-500">Sem estoque no momento.</p>
               </div>
             )}
           </div>
@@ -3611,9 +3617,9 @@ const ProductDetailPage = () => {
               }
             >
               {!hasAnyStock()
-                ? 'INDISPONÍVEL'
+                ? 'ESGOTADO'
                 : !isCurrentSelectionInStock()
-                  ? 'INDISPONÍVEL'
+                  ? 'ESGOTADO'
                   : sizes.length > 0 && !selectedSize
                     ? 'SELECIONE UM TAMANHO'
                     : sizes.length === 0 && colors.length > 0 && !selectedColor
@@ -3776,9 +3782,9 @@ const ProductDetailPage = () => {
         }
         buttonText={
           !hasAnyStock()
-            ? 'INDISPONÍVEL'
+            ? 'ESGOTADO'
             : !isCurrentSelectionInStock()
-              ? 'INDISPONÍVEL'
+              ? 'ESGOTADO'
               : sizes.length > 0 && !selectedSize
                 ? 'SELECIONE UM TAMANHO'
                 : 'ADICIONAR À SACOLA'
