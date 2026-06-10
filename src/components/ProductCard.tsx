@@ -131,17 +131,29 @@ export const ProductCard: React.FC<ProductCardProps> = React.memo(({
           )}
         </FeatureFlag>
 
-        {/* Cores Disponíveis */}
+        {/* Variantes disponíveis — bolinha para cor real (hex/gradiente), pílula para texto (tamanho) */}
         {product.colors.length > 0 && (
-          <div className="flex gap-1 mb-2">
-            {product.colors.slice(0, 5).map((color) => (
-              <div
-                key={color}
-                className="w-4 h-4 rounded-full border border-gray-300"
-                style={{ backgroundColor: color }}
-                title={color}
-              />
-            ))}
+          <div className="flex flex-wrap items-center gap-1 mb-2">
+            {product.colors.slice(0, 5).map((value) => {
+              const isColor =
+                typeof value === 'string' && /^(#|rgb|hsl|linear-gradient)/i.test(value.trim());
+              return isColor ? (
+                <span
+                  key={value}
+                  className="w-4 h-4 rounded-full border border-gray-300"
+                  style={{ background: value }}
+                  title={value}
+                />
+              ) : (
+                <span
+                  key={value}
+                  className="inline-flex items-center justify-center min-w-[20px] h-5 px-1.5 text-[10px] font-medium uppercase border border-gray-300 rounded text-gray-600"
+                  title={value}
+                >
+                  {value}
+                </span>
+              );
+            })}
             {product.colors.length > 5 && (
               <span className="text-xs text-gray-500">+{product.colors.length - 5}</span>
             )}
