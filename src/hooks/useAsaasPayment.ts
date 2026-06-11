@@ -6,7 +6,6 @@ import { useMutation } from '@tanstack/react-query';
 import { createAsaasPayment } from '../lib/asaas';
 import { useCartStore } from '../stores/cartStore';
 import { useBrand } from '../contexts/BrandContext';
-import { useAuth } from '../contexts/AuthContext';
 import type {
   CheckoutFormData,
   CreditCardData,
@@ -22,7 +21,6 @@ interface SubmitPaymentParams {
 export function useAsaasPayment() {
   const cart = useCartStore((s) => s.cart);
   const { currentSlug } = useBrand();
-  const { user } = useAuth();
 
   return useMutation<PaymentResponse, Error, SubmitPaymentParams>({
     mutationFn: async ({ formData, creditCardData }) => {
@@ -79,15 +77,14 @@ export function useAsaasPayment() {
         }
       }
 
-      // Guest info (when not logged in)
-      if (!user) {
-        request.guest_info = {
-          name: formData.customerInfo!.name,
-          email: formData.customerInfo!.email,
-          cpf: formData.customerInfo!.cpf.replace(/\D/g, ''),
-          phone: formData.customerInfo!.phone.replace(/\D/g, ''),
-        };
-      }
+      // Dados do formulário — enviados sempre (logado ou não). A Edge Function usa
+      // como override do perfil; perfis logados podem não ter CPF/telefone salvos.
+      request.guest_info = {
+        name: formData.customerInfo!.name,
+        email: formData.customerInfo!.email,
+        cpf: formData.customerInfo!.cpf.replace(/\D/g, ''),
+        phone: formData.customerInfo!.phone.replace(/\D/g, ''),
+      };
 
       return createAsaasPayment(request);
     },
