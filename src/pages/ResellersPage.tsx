@@ -1,5 +1,4 @@
 import React from 'react';
-import { useBrand } from '../contexts/BrandContext';
 import { useBrandColors } from '../hooks/useTheme';
 import { Package, Percent, Truck, MessageCircle, ShieldCheck, TrendingUp } from 'lucide-react';
 import { motion } from 'framer-motion';
@@ -38,10 +37,9 @@ const benefits = [
 ];
 
 export const ResellersPage: React.FC = () => {
-  const { brand } = useBrand();
   const { primaryColor } = useBrandColors();
-  const contactConfig = (brand?.settings as Record<string, any>)?.contact || {};
-  const whatsappNumber = contactConfig.whatsapp || '5521999999999';
+  // Número cadastrado do time comercial (mesmo usado no FAQ).
+  const whatsappNumber = '5521989041735';
   const whatsappMessage = encodeURIComponent('Olá! Tenho interesse em ser revendedor(a). Gostaria de saber mais sobre as condições de atacado.');
   const whatsappUrl = `https://wa.me/${whatsappNumber}?text=${whatsappMessage}`;
 
