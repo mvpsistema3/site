@@ -129,7 +129,9 @@ body {
     transform: translateX(0);
   }
   100% {
-    transform: translateX(-50%);
+    /* Anda exatamente 1 cópia (track tem N cópias). Mesma velocidade,
+       sem vão: o tempo por cópia não muda com N. */
+    transform: translateX(calc(-100% / var(--marquee-copies, 2)));
   }
 }
 
