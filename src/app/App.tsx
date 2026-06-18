@@ -105,6 +105,21 @@ const prettyColorLabel = (key: string): string =>
     .map((w) => (CONECTORES_COR.has(w) || w.length <= 1 ? w : w.charAt(0).toUpperCase() + w.slice(1)))
     .join(' ');
 
+// Tamanhos: chave canônica em MAIÚSCULO (dedup case-insensitive + match simétrico)
+// e ordenação do menor para o maior. Cobre nomenclatura BR e internacional;
+// tamanhos numéricos (38, 40...) entram em ordem; desconhecidos vão pro fim.
+const SIZE_ORDER = ['PP', 'XS', 'P', 'S', 'M', 'G', 'L', 'GG', 'XL', 'XG', 'XXL', 'XGG', 'XXG', 'XXXL', 'XXXG'];
+
+const normalizeSizeKey = (raw: string): string =>
+  (raw || '').toUpperCase().replace(/\s+/g, ' ').trim();
+
+const sizeRank = (key: string): number => {
+  const i = SIZE_ORDER.indexOf(key);
+  if (i !== -1) return i;
+  if (/^\d+$/.test(key)) return 1000 + Number(key);
+  return 2000;
+};
+
 const ScrollToTop = () => {
   const { pathname } = useLocation();
   const navType = useNavigationType();
@@ -2449,13 +2464,13 @@ const ProductListPage = () => {
   // duplicar PRETO/Preto/Preta; tamanhos ficam com match exato como antes.
   const availableDimensions = useMemo(() => {
     type Opt = { value: string; label: string; hex?: string };
-    const dimensionMap: Record<string, { index: number; isColor: boolean; options: Map<string, Opt> }> = {};
+    const dimensionMap: Record<string, { index: number; isColor: boolean; isSize: boolean; options: Map<string, Opt> }> = {};
 
-    const addValue = (dimName: string, index: number, isColor: boolean, rawVal: string | null | undefined, hex?: string | null) => {
+    const addValue = (dimName: string, index: number, isColor: boolean, isSize: boolean, rawVal: string | null | undefined, hex?: string | null) => {
       if (!rawVal || !rawVal.trim()) return;
-      if (!dimensionMap[dimName]) dimensionMap[dimName] = { index, isColor, options: new Map() };
+      if (!dimensionMap[dimName]) dimensionMap[dimName] = { index, isColor, isSize, options: new Map() };
       const entry = dimensionMap[dimName];
-      const key = isColor ? normalizeColorKey(rawVal) : rawVal.trim();
+      const key = isColor ? normalizeColorKey(rawVal) : isSize ? normalizeSizeKey(rawVal) : rawVal.trim();
       if (!key) return;
       const existing = entry.options.get(key);
       if (existing) {
@@ -2463,7 +2478,7 @@ const ProductListPage = () => {
       } else {
         entry.options.set(key, {
           value: key,
-          label: isColor ? prettyColorLabel(key) : rawVal.trim(),
+          label: isColor ? prettyColorLabel(key) : key, // tamanho já vem em maiúsculo
           hex: hex || undefined,
         });
       }
@@ -2478,32 +2493,40 @@ const ProductListPage = () => {
         dims.forEach((dim: any, idx: number) => {
           const dimName = dim.name || `Opção ${idx + 1}`;
           const isColor = idx === 0; // color = dim[0], size = dim[1]
+          const isSize = idx === 1;
           variants.forEach((v: any) => {
             const val = idx === 0 ? v.color : idx === 1 ? v.size : null;
             const hex = idx === 0 ? v.color_hex : undefined;
-            addValue(dimName, idx, isColor, val, hex);
+            addValue(dimName, idx, isColor, isSize, val, hex);
           });
         });
       } else if (variants.length > 0) {
         // Produto sem variant_dimensions — inferir das variantes
         if (variants.some((v: any) => v.color && v.color.trim())) {
-          variants.forEach((v: any) => addValue('Opção', 0, true, v.color, v.color_hex));
+          variants.forEach((v: any) => addValue('Opção', 0, true, false, v.color, v.color_hex));
         }
         if (variants.some((v: any) => v.size && v.size.trim())) {
-          variants.forEach((v: any) => addValue('Tamanho', 1, false, v.size));
+          variants.forEach((v: any) => addValue('Tamanho', 1, false, true, v.size));
         }
       }
     });
 
-    // Converter para array ordenado por index
+    // Converter para array ordenado por index; tamanhos do menor para o maior
     return Object.entries(dimensionMap)
       .sort((a, b) => a[1].index - b[1].index)
-      .map(([name, data]) => ({
-        name,
-        index: data.index,
-        isColor: data.isColor,
-        values: [...data.options.values()],
-      }));
+      .map(([name, data]) => {
+        const values = [...data.options.values()];
+        if (data.isSize) {
+          values.sort((a, b) => sizeRank(a.value) - sizeRank(b.value) || a.value.localeCompare(b.value));
+        }
+        return {
+          name,
+          index: data.index,
+          isColor: data.isColor,
+          isSize: data.isSize,
+          values,
+        };
+      });
   }, [baseProducts]);
 
   // Faixa de preço real dos produtos
@@ -2529,12 +2552,13 @@ const ProductListPage = () => {
       const dim = availableDimensions.find((d: any) => d.name === dimName);
       const fieldIndex = dim?.index ?? 0;
       const isColor = dim?.isColor ?? (fieldIndex === 0);
+      const isSize = dim?.isSize ?? (fieldIndex === 1);
       const fieldName = fieldIndex === 0 ? 'color' : fieldIndex === 1 ? 'size' : 'color';
       // selectedValues guarda a chave canônica → normalizar o valor da variante igual
       const productValues = variants
         .map((v: any) => v[fieldName])
         .filter(Boolean)
-        .map((val: string) => (isColor ? normalizeColorKey(val) : val));
+        .map((val: string) => (isColor ? normalizeColorKey(val) : isSize ? normalizeSizeKey(val) : val));
       if (!productValues.some((val: string) => selectedValues.includes(val))) return false;
     }
 
