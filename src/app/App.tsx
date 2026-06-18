@@ -120,6 +120,16 @@ const sizeRank = (key: string): number => {
   return 2000;
 };
 
+// Classifica a dimensão pela semântica (nome/tipo da variant_dimension), com
+// fallback posicional. Necessário porque roupas têm só "Tamanho" no índice 0 —
+// classificar por posição trataria tamanho como cor.
+const classifyDim = (name: string | undefined, type: string | undefined, idx: number): 'color' | 'size' | 'text' => {
+  const n = stripAccents((name || '').toLowerCase());
+  if (type === 'color' || /\bcor(es)?\b|color/.test(n)) return 'color';
+  if (/tamanho|\btam\b|size/.test(n)) return 'size';
+  return idx === 0 ? 'color' : idx === 1 ? 'size' : 'text';
+};
+
 const ScrollToTop = () => {
   const { pathname } = useLocation();
   const navType = useNavigationType();
@@ -2492,11 +2502,15 @@ const ProductListPage = () => {
         // Produto com variant_dimensions definido — usar nomes das dimensões
         dims.forEach((dim: any, idx: number) => {
           const dimName = dim.name || `Opção ${idx + 1}`;
-          const isColor = idx === 0; // color = dim[0], size = dim[1]
-          const isSize = idx === 1;
+          // Classifica pela semântica (nome/tipo), não pela posição: roupas têm
+          // só "Tamanho" no índice 0, que não é cor.
+          const kind = classifyDim(dim.name, dim.type, idx);
+          const isColor = kind === 'color';
+          const isSize = kind === 'size';
           variants.forEach((v: any) => {
+            // Valor lido posicionalmente — é onde o dado fica (color=dim[0], size=dim[1])
             const val = idx === 0 ? v.color : idx === 1 ? v.size : null;
-            const hex = idx === 0 ? v.color_hex : undefined;
+            const hex = isColor && idx === 0 ? v.color_hex : undefined;
             addValue(dimName, idx, isColor, isSize, val, hex);
           });
         });
