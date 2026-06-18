@@ -68,6 +68,43 @@ import { motion, AnimatePresence, useScroll, useTransform, useInView } from 'fra
 
 // --- Utils ---
 
+// Normalização de cor para o filtro de catálogo.
+// Unifica variações de caixa/acento/gênero/plural numa chave canônica.
+// IMPORTANTE: usada tanto na MONTAGEM das opções quanto no MATCHING — as duas
+// pontas precisam usar a MESMA chave, senão a seleção não casa com a variante.
+// Não é lista branca: cor desconhecida (ex.: "Textura Laranja") passa intacta.
+const COLOR_SYNONYMS: Record<string, string> = {
+  preta: 'preto', pretas: 'preto', pretos: 'preto',
+  branca: 'branco', brancas: 'branco', brancos: 'branco',
+  vermelha: 'vermelho', vermelhas: 'vermelho', vermelhos: 'vermelho',
+  amarela: 'amarelo', amarelas: 'amarelo', amarelos: 'amarelo',
+  roxa: 'roxo', roxas: 'roxo', roxos: 'roxo',
+  dourada: 'dourado', douradas: 'dourado', dourados: 'dourado',
+  prateada: 'prateado', prateadas: 'prateado', prateados: 'prateado',
+  azuis: 'azul', verdes: 'verde', rosas: 'rosa',
+  cinzas: 'cinza', laranjas: 'laranja', marrons: 'marrom',
+};
+
+const CONECTORES_COR = new Set(['e', 'com', 'de', 'da', 'do', 'dos', 'das']);
+
+const stripAccents = (s: string) => s.normalize('NFD').replace(/[̀-ͯ]/g, '');
+
+// Chave canônica para agrupar/comparar cores (palavra a palavra, p/ pegar combos).
+const normalizeColorKey = (raw: string): string =>
+  stripAccents((raw || '').toLowerCase())
+    .replace(/\s+/g, ' ')
+    .trim()
+    .split(' ')
+    .map((w) => COLOR_SYNONYMS[w] || w)
+    .join(' ');
+
+// Rótulo exibido no botão do filtro, derivado da chave canônica.
+const prettyColorLabel = (key: string): string =>
+  key
+    .split(' ')
+    .map((w) => (CONECTORES_COR.has(w) || w.length <= 1 ? w : w.charAt(0).toUpperCase() + w.slice(1)))
+    .join(' ');
+
 const ScrollToTop = () => {
   const { pathname } = useLocation();
   const navType = useNavigationType();
@@ -2407,40 +2444,53 @@ const ProductListPage = () => {
     : (collectionSlug ? (collectionProducts || []) : (categorySlug ? (categoryProducts || []) : (allProducts || [])));
   const isLoading = isSearching ? loadingSearch : (collectionSlug ? loadingCollection : (categorySlug ? loadingCategory : loadingAll));
 
-  // Dimensões dinâmicas extraídas de variant_dimensions dos produtos
+  // Dimensões dinâmicas extraídas de variant_dimensions dos produtos.
+  // Cores são agrupadas por chave canônica (ver normalizeColorKey) para não
+  // duplicar PRETO/Preto/Preta; tamanhos ficam com match exato como antes.
   const availableDimensions = useMemo(() => {
-    const dimensionMap: Record<string, { values: Set<string>; index: number }> = {};
+    type Opt = { value: string; label: string; hex?: string };
+    const dimensionMap: Record<string, { index: number; isColor: boolean; options: Map<string, Opt> }> = {};
+
+    const addValue = (dimName: string, index: number, isColor: boolean, rawVal: string | null | undefined, hex?: string | null) => {
+      if (!rawVal || !rawVal.trim()) return;
+      if (!dimensionMap[dimName]) dimensionMap[dimName] = { index, isColor, options: new Map() };
+      const entry = dimensionMap[dimName];
+      const key = isColor ? normalizeColorKey(rawVal) : rawVal.trim();
+      if (!key) return;
+      const existing = entry.options.get(key);
+      if (existing) {
+        if (!existing.hex && hex) existing.hex = hex; // completa o swatch se faltava
+      } else {
+        entry.options.set(key, {
+          value: key,
+          label: isColor ? prettyColorLabel(key) : rawVal.trim(),
+          hex: hex || undefined,
+        });
+      }
+    };
 
     baseProducts.forEach((p: any) => {
-      const dims = p.variant_dimensions as Array<{ name: string; type: string; values: Array<{ name: string }> }> | null;
+      const dims = p.variant_dimensions as Array<{ name: string; type: string }> | null;
       const variants = p.product_variants || [];
 
       if (dims && dims.length > 0) {
         // Produto com variant_dimensions definido — usar nomes das dimensões
         dims.forEach((dim: any, idx: number) => {
           const dimName = dim.name || `Opção ${idx + 1}`;
-          if (!dimensionMap[dimName]) {
-            dimensionMap[dimName] = { values: new Set(), index: idx };
-          }
-          // Coletar valores reais das variantes (color = dim[0], size = dim[1])
+          const isColor = idx === 0; // color = dim[0], size = dim[1]
           variants.forEach((v: any) => {
             const val = idx === 0 ? v.color : idx === 1 ? v.size : null;
-            if (val && val.trim()) dimensionMap[dimName].values.add(val);
+            const hex = idx === 0 ? v.color_hex : undefined;
+            addValue(dimName, idx, isColor, val, hex);
           });
         });
       } else if (variants.length > 0) {
         // Produto sem variant_dimensions — inferir das variantes
-        const hasColor = variants.some((v: any) => v.color && v.color.trim());
-        const hasSize = variants.some((v: any) => v.size && v.size.trim());
-        if (hasColor) {
-          const dimName = 'Opção';
-          if (!dimensionMap[dimName]) dimensionMap[dimName] = { values: new Set(), index: 0 };
-          variants.forEach((v: any) => { if (v.color && v.color.trim()) dimensionMap[dimName].values.add(v.color); });
+        if (variants.some((v: any) => v.color && v.color.trim())) {
+          variants.forEach((v: any) => addValue('Opção', 0, true, v.color, v.color_hex));
         }
-        if (hasSize) {
-          const dimName = 'Tamanho';
-          if (!dimensionMap[dimName]) dimensionMap[dimName] = { values: new Set(), index: 1 };
-          variants.forEach((v: any) => { if (v.size && v.size.trim()) dimensionMap[dimName].values.add(v.size); });
+        if (variants.some((v: any) => v.size && v.size.trim())) {
+          variants.forEach((v: any) => addValue('Tamanho', 1, false, v.size));
         }
       }
     });
@@ -2450,8 +2500,9 @@ const ProductListPage = () => {
       .sort((a, b) => a[1].index - b[1].index)
       .map(([name, data]) => ({
         name,
-        values: [...data.values],
-        index: data.index
+        index: data.index,
+        isColor: data.isColor,
+        values: [...data.options.values()],
       }));
   }, [baseProducts]);
 
@@ -2477,8 +2528,13 @@ const ProductListPage = () => {
       // Descobrir qual campo da variante corresponde a essa dimensão
       const dim = availableDimensions.find((d: any) => d.name === dimName);
       const fieldIndex = dim?.index ?? 0;
+      const isColor = dim?.isColor ?? (fieldIndex === 0);
       const fieldName = fieldIndex === 0 ? 'color' : fieldIndex === 1 ? 'size' : 'color';
-      const productValues = variants.map((v: any) => v[fieldName]).filter(Boolean);
+      // selectedValues guarda a chave canônica → normalizar o valor da variante igual
+      const productValues = variants
+        .map((v: any) => v[fieldName])
+        .filter(Boolean)
+        .map((val: string) => (isColor ? normalizeColorKey(val) : val));
       if (!productValues.some((val: string) => selectedValues.includes(val))) return false;
     }
 
@@ -2681,16 +2737,23 @@ const ProductListPage = () => {
             <div key={dim.name} className="pb-8 border-b border-gray-100">
               <h3 className="font-bold text-sm uppercase tracking-wider mb-5 text-gray-900">{dim.name}</h3>
               <div className="grid grid-cols-3 gap-2">
-                {dim.values.map((value: string) => (
-                  <button
-                    key={value}
-                    onClick={() => togglePendingDimension(dim.name, value)}
-                    className={`py-3 text-sm font-bold border-2 rounded transition-all duration-200 hover:scale-105 active:scale-95 ${(pendingDimensions[dim.name] || []).includes(value) ? 'text-white shadow-md' : 'bg-white text-gray-700 border-gray-200 hover:border-gray-300'}`}
-                    style={(pendingDimensions[dim.name] || []).includes(value) ? { backgroundColor: primaryColor, borderColor: primaryColor } : {}}
-                  >
-                    {value}
-                  </button>
-                ))}
+                {dim.values.map((opt: { value: string; label: string; hex?: string }) => {
+                  const selected = (pendingDimensions[dim.name] || []).includes(opt.value);
+                  return (
+                    <button
+                      key={opt.value}
+                      title={opt.label}
+                      onClick={() => togglePendingDimension(dim.name, opt.value)}
+                      className={`flex items-center justify-center gap-1.5 py-3 px-2 text-sm font-bold border-2 rounded transition-all duration-200 hover:scale-105 active:scale-95 ${selected ? 'text-white shadow-md' : 'bg-white text-gray-700 border-gray-200 hover:border-gray-300'}`}
+                      style={selected ? { backgroundColor: primaryColor, borderColor: primaryColor } : {}}
+                    >
+                      {dim.isColor && opt.hex && (
+                        <span className="w-4 h-4 rounded-full border border-black/10 shrink-0" style={{ backgroundColor: opt.hex }} />
+                      )}
+                      <span className="truncate">{opt.label}</span>
+                    </button>
+                  );
+                })}
               </div>
             </div>
           ))}
@@ -2957,16 +3020,23 @@ const ProductListPage = () => {
                   >
                     <h3 className="font-bold text-sm mb-4 uppercase tracking-wider text-gray-900">{dim.name}</h3>
                     <div className="grid grid-cols-4 gap-2">
-                      {dim.values.map((value: string) => (
-                        <button
-                          key={value}
-                          onClick={() => togglePendingDimension(dim.name, value)}
-                          className={`py-3 text-sm font-bold border-2 rounded-lg transition-all duration-200 min-h-[48px] active:scale-95 ${(pendingDimensions[dim.name] || []).includes(value) ? 'text-white shadow-md' : 'bg-white text-gray-700 border-gray-200'}`}
-                          style={(pendingDimensions[dim.name] || []).includes(value) ? { backgroundColor: primaryColor, borderColor: primaryColor } : {}}
-                        >
-                          {value}
-                        </button>
-                      ))}
+                      {dim.values.map((opt: { value: string; label: string; hex?: string }) => {
+                        const selected = (pendingDimensions[dim.name] || []).includes(opt.value);
+                        return (
+                          <button
+                            key={opt.value}
+                            title={opt.label}
+                            onClick={() => togglePendingDimension(dim.name, opt.value)}
+                            className={`flex items-center justify-center gap-1 py-3 px-1.5 text-sm font-bold border-2 rounded-lg transition-all duration-200 min-h-[48px] active:scale-95 ${selected ? 'text-white shadow-md' : 'bg-white text-gray-700 border-gray-200'}`}
+                            style={selected ? { backgroundColor: primaryColor, borderColor: primaryColor } : {}}
+                          >
+                            {dim.isColor && opt.hex && (
+                              <span className="w-3.5 h-3.5 rounded-full border border-black/10 shrink-0" style={{ backgroundColor: opt.hex }} />
+                            )}
+                            <span className="truncate">{opt.label}</span>
+                          </button>
+                        );
+                      })}
                     </div>
                   </motion.div>
                 ))}
