@@ -64,12 +64,14 @@ export function useAsaasPayment() {
           expiryYear: `20${expiryYear}`,
           ccv: creditCardData.cvv,
         };
+        // Cobrança do titular: na retirada vem do próprio formulário do cartão
+        // (creditCardData.postalCode/addressNumber); na entrega, do endereço.
         request.payment.credit_card_holder_info = {
           name: formData.customerInfo!.name,
           email: formData.customerInfo!.email,
           cpfCnpj: formData.customerInfo!.cpf,
-          postalCode: formData.shippingAddress!.cep.replace(/\D/g, ''),
-          addressNumber: formData.shippingAddress!.number,
+          postalCode: (creditCardData.postalCode || formData.shippingAddress!.cep).replace(/\D/g, ''),
+          addressNumber: creditCardData.addressNumber || formData.shippingAddress!.number,
           phone: formData.customerInfo!.phone.replace(/\D/g, ''),
         };
         if (formData.installments > 1) {

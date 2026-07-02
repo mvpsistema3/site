@@ -1,7 +1,7 @@
 import { useEffect } from 'react';
 import { useForm } from 'react-hook-form';
 import { motion } from 'framer-motion';
-import { CreditCard, User, Calendar, Lock, ShieldCheck } from 'lucide-react';
+import { CreditCard, User, Calendar, Lock, ShieldCheck, MapPin, Hash } from 'lucide-react';
 import {
   detectCardBrand,
   isValidLuhn,
@@ -15,6 +15,8 @@ import type { CreditCardData } from '../../types/checkout.types';
 
 interface CreditCardFormProps {
   onCardDataChange: (data: CreditCardData | null) => void;
+  /** Na retirada não há endereço de entrega — pedimos CEP + número de cobrança do titular. */
+  askBillingAddress?: boolean;
 }
 
 interface FormValues {
@@ -22,6 +24,8 @@ interface FormValues {
   holder_name: string;
   expiry: string;
   cvv: string;
+  postal_code: string;
+  address_number: string;
 }
 
 const BRAND_LABELS: Record<CardBrand, string> = {
@@ -42,7 +46,7 @@ const fieldVariants = {
   }),
 };
 
-export function CreditCardForm({ onCardDataChange }: CreditCardFormProps) {
+export function CreditCardForm({ onCardDataChange, askBillingAddress = false }: CreditCardFormProps) {
   const { primaryColor } = useBrandColors();
 
   const {
@@ -52,13 +56,15 @@ export function CreditCardForm({ onCardDataChange }: CreditCardFormProps) {
     formState: { errors, isValid },
   } = useForm<FormValues>({
     mode: 'onChange',
-    defaultValues: { number: '', holder_name: '', expiry: '', cvv: '' },
+    defaultValues: { number: '', holder_name: '', expiry: '', cvv: '', postal_code: '', address_number: '' },
   });
 
   const numberValue = watch('number');
   const expiryValue = watch('expiry');
   const holderName = watch('holder_name');
   const cvv = watch('cvv');
+  const postalCode = watch('postal_code');
+  const addressNumber = watch('address_number');
 
   const brand = detectCardBrand(numberValue);
   const cvvLength = getCvvLength(brand);
@@ -79,6 +85,15 @@ export function CreditCardForm({ onCardDataChange }: CreditCardFormProps) {
     }
   }, [expiryValue, setValue]);
 
+  // Auto-format CEP de cobrança (só relevante quando askBillingAddress)
+  useEffect(() => {
+    if (postalCode) {
+      const d = postalCode.replace(/\D/g, '').substring(0, 8);
+      const formatted = d.length > 5 ? `${d.slice(0, 5)}-${d.slice(5)}` : d;
+      if (formatted !== postalCode) setValue('postal_code', formatted, { shouldValidate: true });
+    }
+  }, [postalCode, setValue]);
+
   // Notify parent of card data validity
   useEffect(() => {
     const digits = numberValue.replace(/\D/g, '');
@@ -87,17 +102,24 @@ export function CreditCardForm({ onCardDataChange }: CreditCardFormProps) {
     const isCvvValid = cvv.replace(/\D/g, '').length === cvvLength;
     const isNameValid = holderName.trim().length >= 3;
 
-    if (isNumberValid && isExpiryValid && isCvvValid && isNameValid) {
+    // Cobrança do titular: obrigatória só na retirada (CEP 8 dígitos + número)
+    const cepDigits = postalCode.replace(/\D/g, '');
+    const isBillingValid = !askBillingAddress || (cepDigits.length === 8 && addressNumber.trim().length >= 1);
+
+    if (isNumberValid && isExpiryValid && isCvvValid && isNameValid && isBillingValid) {
       onCardDataChange({
         number: digits,
         holder_name: holderName.trim().toUpperCase(),
         expiry: expiryValue,
         cvv: cvv.replace(/\D/g, ''),
+        ...(askBillingAddress
+          ? { postalCode: cepDigits, addressNumber: addressNumber.trim() }
+          : {}),
       });
     } else {
       onCardDataChange(null);
     }
-  }, [numberValue, expiryValue, cvv, holderName, cvvLength, onCardDataChange]);
+  }, [numberValue, expiryValue, cvv, holderName, cvvLength, postalCode, addressNumber, askBillingAddress, onCardDataChange]);
 
   const inputClassName =
     'w-full pl-12 pr-4 py-3.5 bg-gray-50/50 border border-gray-200 rounded-xl text-sm transition-all duration-200 focus:outline-none focus:bg-white focus:border-gray-300 focus:ring-2';
@@ -228,8 +250,59 @@ export function CreditCardForm({ onCardDataChange }: CreditCardFormProps) {
           </div>
         </motion.div>
 
+        {/* Cobrança do titular — só na retirada (sem endereço de entrega) */}
+        {askBillingAddress && (
+          <motion.div custom={3} variants={fieldVariants} initial="hidden" animate="visible" className="space-y-3">
+            <div className="flex items-center gap-2 pt-1">
+              <div className="flex-1 border-t border-gray-100" />
+              <span className="text-[11px] font-bold uppercase tracking-wide text-gray-400">Endereço de cobrança do cartão</span>
+              <div className="flex-1 border-t border-gray-100" />
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="block text-xs font-bold uppercase tracking-wide text-gray-500 mb-1.5">CEP do titular</label>
+                <div className="relative">
+                  <div className="absolute left-3 top-1/2 -translate-y-1/2 w-7 h-7 rounded-full bg-gray-100 flex items-center justify-center">
+                    <MapPin size={14} className="text-gray-400" />
+                  </div>
+                  <input
+                    {...register('postal_code', {
+                      required: 'CEP é obrigatório',
+                      validate: (v) => v.replace(/\D/g, '').length === 8 || 'CEP incompleto',
+                    })}
+                    placeholder="00000-000"
+                    inputMode="numeric"
+                    autoComplete="postal-code"
+                    maxLength={9}
+                    className={inputClassName}
+                    style={{ '--tw-ring-color': `${primaryColor}30` } as any}
+                  />
+                </div>
+                {errors.postal_code && <p className="mt-1.5 text-xs text-red-500">{errors.postal_code.message}</p>}
+              </div>
+              <div>
+                <label className="block text-xs font-bold uppercase tracking-wide text-gray-500 mb-1.5">Número</label>
+                <div className="relative">
+                  <div className="absolute left-3 top-1/2 -translate-y-1/2 w-7 h-7 rounded-full bg-gray-100 flex items-center justify-center">
+                    <Hash size={14} className="text-gray-400" />
+                  </div>
+                  <input
+                    {...register('address_number', {
+                      required: 'Número é obrigatório',
+                    })}
+                    placeholder="Nº"
+                    className={inputClassName}
+                    style={{ '--tw-ring-color': `${primaryColor}30` } as any}
+                  />
+                </div>
+                {errors.address_number && <p className="mt-1.5 text-xs text-red-500">{errors.address_number.message}</p>}
+              </div>
+            </div>
+          </motion.div>
+        )}
+
         <motion.div
-          custom={3}
+          custom={askBillingAddress ? 4 : 3}
           variants={fieldVariants}
           initial="hidden"
           animate="visible"

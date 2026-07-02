@@ -50,6 +50,9 @@ export interface CreditCardData {
   holder_name: string;
   expiry: string; // "MM/YY"
   cvv: string;
+  // Cobrança do titular — coletado só na retirada (no envio normal vem do endereço de entrega)
+  postalCode?: string;    // só dígitos
+  addressNumber?: string;
 }
 
 export interface CreditCardHolderInfo {

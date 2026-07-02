@@ -128,7 +128,9 @@ export function CheckoutPage() {
         const pa = brand.settings.pickupAddress;
         setShippingAddress({
           recipient_name: formData.customerInfo?.name || '',
-          cep: pa.cep || '',
+          // settings.pickupAddress salva o CEP na chave `zipcode` (não `cep`).
+          // Sem isso o CEP ia vazio e o Asaas recusava o cartão (postalCode obrigatório).
+          cep: pa.zipcode || pa.cep || '',
           street: pa.street || '',
           number: pa.number || '',
           complement: pa.complement || '',
@@ -327,6 +329,7 @@ export function CheckoutPage() {
                 {formData.paymentMethod === 'credit_card' && (
                   <>
                     <CreditCardForm
+                      askBillingAddress={isPickup}
                       onCardDataChange={(data) => {
                         creditCardRef.current = data;
                       }}
